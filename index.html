@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>DRIFT PULSE</title>
+<style>
+  :root{
+    --bg:#0B0E14;
+    --bg2:#10141d;
+    --cyan:#4FF7D1;
+    --magenta:#FF3D8A;
+    --gold:#FFC857;
+    --ink:#E7ECF3;
+    --dim:#5B6577;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;padding:0;height:100%;
+    background:radial-gradient(120% 140% at 50% -10%, #151b26 0%, var(--bg) 55%, #05070a 100%);
+    font-family:'IBM Plex Mono','Courier New',monospace;
+    color:var(--ink);
+    overflow:hidden;
+    display:flex;align-items:center;justify-content:center;
+  }
+  #wrap{
+    position:relative;
+    height:94vh;
+    width:auto;
+    max-width:95vw;
+    aspect-ratio: 3/4;
+    border-radius:18px;
+    overflow:hidden;
+    box-shadow:0 0 0 1px rgba(255,255,255,0.06), 0 30px 80px rgba(0,0,0,0.6);
+    background:#05070a;
+  }
+  canvas{display:block;width:100%;height:100%;}
+
+  #wrap[data-theme="bright"] .hud .stat{ color:#8a7f6b; }
+  #wrap[data-theme="bright"] .hud .stat b{ color:#2e2a22; }
+  #wrap[data-theme="bright"] .hint{ color:#8a7f6b; }
+  #wrap[data-theme="bright"] .icon-btn{
+    background:rgba(255,255,255,0.5);
+    border-color:rgba(0,0,0,0.1);
+    color:#2e2a22;
+  }
+
+  .hud{
+    position:absolute; top:0; left:0; right:0;
+    display:flex; justify-content:space-between; align-items:flex-start;
+    padding:14px 16px;
+    pointer-events:none;
+    z-index:5;
+  }
+  .hud .stat{
+    font-size:13px; letter-spacing:0.08em;
+    color:var(--dim);
+  }
+  .hud .stat b{
+    display:block;
+    font-size:22px;
+    color:var(--ink);
+    font-weight:600;
+    letter-spacing:0;
+  }
+  .hud .coins{ color:var(--gold); }
+  .hud .coins b{ color:var(--gold); }
+
+  .difficulty-bar{
+    position:absolute; top:0; left:0; right:0; height:3px;
+    background:rgba(255,255,255,0.06);
+    z-index:5;
+  }
+  .difficulty-bar > i{
+    display:block; height:100%; width:0%;
+    background:linear-gradient(90deg, var(--cyan), var(--magenta));
+    transition:width .4s ease;
+  }
+
+  .overlay{
+    position:absolute; inset:0;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center;
+    padding:32px;
+    background:linear-gradient(180deg, rgba(5,7,10,0.2), rgba(5,7,10,0.9) 70%);
+    z-index:10;
+  }
+  .overlay.hidden{ display:none; }
+
+  .title{
+    font-family:'Segoe UI', sans-serif;
+    font-weight:800;
+    font-size:38px;
+    letter-spacing:0.02em;
+    margin:0 0 6px;
+    background:linear-gradient(90deg, var(--cyan), #9be8ff);
+    -webkit-background-clip:text;
+    background-clip:text;
+    color:transparent;
+  }
+  .subtitle{
+    color:var(--dim);
+    font-size:13px;
+    letter-spacing:0.06em;
+    margin-bottom:28px;
+  }
+  .bignum{
+    font-family:'Segoe UI', sans-serif;
+    font-size:56px; font-weight:800; color:var(--ink);
+    margin:4px 0;
+  }
+  .label{ color:var(--dim); font-size:12px; letter-spacing:0.1em; text-transform:uppercase; }
+
+  .btn{
+    margin-top:22px;
+    background:var(--cyan);
+    color:#052027;
+    border:none;
+    font-family:inherit;
+    font-weight:700;
+    font-size:14px;
+    letter-spacing:0.05em;
+    padding:14px 28px;
+    border-radius:999px;
+    cursor:pointer;
+    box-shadow:0 8px 24px rgba(79,247,209,0.25);
+  }
+  .btn.secondary{
+    background:transparent;
+    color:var(--ink);
+    border:1px solid rgba(255,255,255,0.2);
+    box-shadow:none;
+    margin-top:10px;
+  }
+  .btn.ad{
+    background:var(--gold);
+    color:#332400;
+    box-shadow:0 8px 24px rgba(255,200,87,0.25);
+  }
+  .row{ display:flex; gap:28px; margin:18px 0; }
+  .rowitem b{ display:block; font-size:24px; }
+
+  .chest-pop{
+    position:absolute; left:50%; top:64px;
+    transform:translate(-50%,-12px);
+    background:rgba(10,14,20,0.92);
+    border:1px solid rgba(255,200,87,0.5);
+    border-radius:12px;
+    padding:8px 16px;
+    text-align:center;
+    opacity:0;
+    z-index:8;
+    pointer-events:none;
+    transition:opacity .25s ease, transform .25s ease;
+  }
+  .chest-pop.show{
+    opacity:1;
+    transform:translate(-50%,0);
+  }
+  .chest-pop .amt{
+    font-family:'Segoe UI',sans-serif;
+    font-size:18px; font-weight:800; color:var(--gold);
+  }
+  .chest-pop .tag{
+    font-size:9px; color:var(--dim); letter-spacing:0.08em;
+  }
+
+  .hint{
+    position:absolute; bottom:18px; left:0; right:0;
+    text-align:center;
+    font-size:11px; color:var(--dim);
+    letter-spacing:0.06em;
+    z-index:5;
+    pointer-events:none;
+  }
+
+  .icon-btn{
+    pointer-events:auto;
+    width:32px; height:32px;
+    border-radius:50%;
+    border:1px solid rgba(255,255,255,0.14);
+    background:rgba(10,14,20,0.5);
+    color:var(--ink);
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer;
+    font-size:15px;
+  }
+
+  .settings-panel{
+    position:absolute; inset:0;
+    background:rgba(5,7,10,0.94);
+    z-index:20;
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    padding:32px;
+  }
+  .settings-panel.hidden{ display:none; }
+  .settings-panel h2{
+    font-family:'Segoe UI',sans-serif;
+    font-size:20px; margin:0 0 26px; color:var(--ink);
+  }
+  .slider-row{
+    width:100%; max-width:280px;
+    margin-bottom:20px;
+    text-align:left;
+  }
+  .slider-row .slabel{
+    display:flex; justify-content:space-between;
+    font-size:11px; letter-spacing:0.08em; color:var(--dim);
+    margin-bottom:6px;
+    text-transform:uppercase;
+  }
+  .slider-row .slabel span:last-child{ color:var(--cyan); }
+  input[type=range]{
+    -webkit-appearance:none;
+    width:100%; height:4px;
+    border-radius:2px;
+    background:rgba(255,255,255,0.12);
+    outline:none;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;
+    width:16px; height:16px;
+    border-radius:50%;
+    background:var(--cyan);
+    cursor:pointer;
+    box-shadow:0 0 8px rgba(79,247,209,0.6);
+  }
+  input[type=range]::-moz-range-thumb{
+    width:16px; height:16px; border:none; border-radius:50%;
+    background:var(--cyan); cursor:pointer;
+  }
+
+  .toggle-group{
+    display:flex; gap:8px;
+  }
+  .toggle-btn{
+    flex:1;
+    padding:10px 8px;
+    border-radius:10px;
+    border:1px solid rgba(255,255,255,0.14);
+    background:rgba(255,255,255,0.04);
+    color:var(--dim);
+    font-family:inherit;
+    font-size:12px;
+    letter-spacing:0.03em;
+    cursor:pointer;
+  }
+  .toggle-btn.active{
+    border-color:var(--cyan);
+    color:var(--ink);
+    background:rgba(79,247,209,0.12);
+  }
+
+  .swatch-grid{
+    display:grid;
+    grid-template-columns:repeat(4, 1fr);
+    gap:16px;
+    margin:20px 0 26px;
+  }
+  .swatch{
+    width:48px; height:48px;
+    border-radius:50%;
+    border:2px solid rgba(255,255,255,0.15);
+    cursor:pointer;
+    box-shadow:0 0 10px rgba(0,0,0,0.3);
+  }
+  .swatch.active{
+    border-color:#fff;
+    box-shadow:0 0 0 3px rgba(255,255,255,0.25), 0 0 14px currentColor;
+  }
+  .swatch.auto{
+    background:conic-gradient(#4FF7D1,#9d7bff,#FF3D8A,#ff5b3d,#4FF7D1);
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div class="difficulty-bar"><i id="diffFill"></i></div>
+  <div class="hud">
+    <div class="stat">SCORE<b id="scoreVal">0</b></div>
+    <div style="display:flex; align-items:flex-start; gap:14px; pointer-events:auto;">
+      <div class="stat coins">COINS<b id="coinVal">0</b></div>
+      <div class="icon-btn" id="settingsBtn" title="設定">⚙</div>
+    </div>
+  </div>
+
+  <div class="settings-panel hidden" id="settingsPanel">
+    <h2>SOUND SETTINGS</h2>
+    <div class="slider-row">
+      <div class="slabel"><span>マスター音量</span><span id="masterVal">70%</span></div>
+      <input type="range" id="masterSlider" min="0" max="100" value="70">
+    </div>
+    <div class="slider-row">
+      <div class="slabel"><span>BGM</span><span id="bgmVal">50%</span></div>
+      <input type="range" id="bgmSlider" min="0" max="100" value="50">
+    </div>
+    <div class="slider-row">
+      <div class="slabel"><span>効果音(SE)</span><span id="seVal">80%</span></div>
+      <input type="range" id="seSlider" min="0" max="100" value="80">
+    </div>
+    <div class="slider-row">
+      <div class="slabel"><span>BGMスタイル</span></div>
+      <div class="toggle-group">
+        <button class="toggle-btn" id="bgmAmbientBtn">アンビエント</button>
+        <button class="toggle-btn" id="bgmPopBtn">ポップ</button>
+      </div>
+    </div>
+    <div class="slider-row">
+      <div class="slabel"><span>テーマ</span></div>
+      <div class="toggle-group">
+        <button class="toggle-btn" id="themeDarkBtn">ダーク</button>
+        <button class="toggle-btn" id="themeBrightBtn">ブライト</button>
+      </div>
+    </div>
+    <button class="btn secondary" id="closeSettingsBtn">閉じる</button>
+  </div>
+
+  <canvas id="game"></canvas>
+
+  <div class="chest-pop" id="chestPop">
+    <div class="tag">REWARD CHEST</div>
+    <div class="amt" id="chestAmt">+0</div>
+  </div>
+
+  <div class="hint" id="hint">タップ / クリック / スペースキーで上昇</div>
+
+  <div class="overlay" id="startScreen">
+    <div class="title">DRIFT PULSE</div>
+    <div class="subtitle">光の粒となり、トンネルを駆け抜けろ</div>
+    <div id="orbPreview" style="width:34px;height:34px;border-radius:50%;margin:0 auto 18px;box-shadow:0 0 16px currentColor;"></div>
+    <button class="btn" id="startBtn">START</button>
+    <button class="btn secondary" id="colorPickBtn">🎨 オーブの色を選ぶ</button>
+    <button class="btn secondary" id="settingsBtnStart">⚙ 設定</button>
+    <div class="subtitle" style="margin-top:18px;">前兆の光を見て、次の動きを読め</div>
+  </div>
+
+  <div class="overlay hidden" id="colorScreen">
+    <div class="label">ORB COLOR</div>
+    <div class="subtitle" style="margin-top:8px;">好きな色を選ぶか、ティアごとに自動で変わる「オート」のままでもOK</div>
+    <div class="swatch-grid" id="swatchGrid"></div>
+    <button class="btn secondary" id="colorBackBtn">戻る</button>
+  </div>
+
+  <div class="overlay hidden" id="gameOverScreen">
+    <div class="label">RUN OVER</div>
+    <div class="bignum" id="finalScore">0</div>
+    <div class="row">
+      <div class="rowitem"><span class="label">BEST</span><b id="bestScore">0</b></div>
+      <div class="rowitem"><span class="label">COINS</span><b id="finalCoins">0</b></div>
+    </div>
+    <button class="btn ad" id="adBtn">▶ 広告を見て続行(コイン2倍)</button>
+    <button class="btn secondary" id="retryBtn">もう一度</button>
+    <button class="btn secondary" id="settingsBtnOver">⚙ 設定</button>
+  </div>
+
+  <div class="overlay hidden" id="adScreen">
+    <div class="label">AD PLAYING</div>
+    <div class="bignum" id="adCountdown">5</div>
+    <div class="subtitle">※これは広告配置のモックです。実際の配信には広告SDK連携が必要です</div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const wrap = document.getElementById('wrap');
+
+  let W, H;
+  function resize(){
+    const rect = wrap.getBoundingClientRect();
+    W = canvas.width = rect.width * devicePixelRatio;
+    H = canvas.height = rect.height * devicePixelRatio;
+    ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+  }
+  window.addEventListener('resize', resize);
+
+  // ---- Audio Manager (synthesized, no external files) ----
+  const Audio_ = (() => {
+    let ctxA = null;
+    let master, bgmGain, seGain;
+    let bgmNodes = null;
+    let bgmPopTimer = null;
+    let settings = { master:70, bgm:50, se:80, theme:'dark', bgmMode:'ambient', orbColor:null };
+    try{
+      const saved = JSON.parse(localStorage.getItem('driftpulse_audio') || 'null');
+      if (saved) settings = Object.assign(settings, saved);
+    }catch(e){}
+
+    function ensure(){
+      if (ctxA) return;
+      ctxA = new (window.AudioContext || window.webkitAudioContext)();
+      master = ctxA.createGain();
+      master.gain.value = settings.master/100;
+      master.connect(ctxA.destination);
+      bgmGain = ctxA.createGain();
+      bgmGain.gain.value = settings.bgm/100;
+      bgmGain.connect(master);
+      seGain = ctxA.createGain();
+      seGain.gain.value = settings.se/100;
+      seGain.connect(master);
+    }
+
+    function persist(){
+      try{ localStorage.setItem('driftpulse_audio', JSON.stringify(settings)); }catch(e){}
+    }
+
+    function setVol(kind, val){
+      settings[kind] = val;
+      if (ctxA){
+        if (kind==='master') master.gain.value = val/100;
+        if (kind==='bgm') bgmGain.gain.value = val/100;
+        if (kind==='se') seGain.gain.value = val/100;
+      }
+      persist();
+    }
+
+    function tone(freq, dur, type='sine', gainPeak=0.25, dest=seGain, glideTo=null){
+      ensure();
+      const t0 = ctxA.currentTime;
+      const osc = ctxA.createOscillator();
+      const g = ctxA.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, t0);
+      if (glideTo) osc.frequency.exponentialRampToValueAtTime(glideTo, t0+dur);
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(gainPeak, t0+0.015);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0+dur);
+      osc.connect(g); g.connect(dest);
+      osc.start(t0); osc.stop(t0+dur+0.02);
+    }
+
+    function jump(){ tone(520, 0.09, 'square', 0.18, seGain, 780); }
+    function coin(){ tone(1046, 0.06, 'sine', 0.2); setTimeout(()=>tone(1568,0.08,'sine',0.18), 55); }
+    function chest(){
+      [880, 1108, 1318, 1760].forEach((f,i)=> setTimeout(()=> tone(f, 0.13, 'triangle', 0.22), i*70));
+    }
+    function tierUp(){ tone(220, 0.4, 'sawtooth', 0.15, seGain, 660); }
+    function hit(){
+      ensure();
+      const t0 = ctxA.currentTime;
+      const bufSize = ctxA.sampleRate*0.25;
+      const buf = ctxA.createBuffer(1, bufSize, ctxA.sampleRate);
+      const data = buf.getChannelData(0);
+      for(let i=0;i<bufSize;i++) data[i] = (Math.random()*2-1) * (1 - i/bufSize);
+      const noise = ctxA.createBufferSource();
+      noise.buffer = buf;
+      const g = ctxA.createGain();
+      g.gain.setValueAtTime(0.35, t0);
+      g.gain.exponentialRampToValueAtTime(0.001, t0+0.25);
+      noise.connect(g); g.connect(seGain);
+      noise.start(t0);
+    }
+    function click(){ tone(400, 0.05, 'square', 0.12); }
+
+    // -- Ambient BGM: slow detuned drone --
+    function startBgmAmbient(){
+      ensure();
+      if (bgmNodes) return;
+      const o1 = ctxA.createOscillator();
+      const o2 = ctxA.createOscillator();
+      const g = ctxA.createGain();
+      o1.type='sine'; o2.type='sine';
+      o1.frequency.value = 110; o2.frequency.value = 110*1.5;
+      g.gain.value = 0.12;
+      const lfo = ctxA.createOscillator();
+      const lfoGain = ctxA.createGain();
+      lfo.frequency.value = 0.12;
+      lfoGain.gain.value = 0.05;
+      lfo.connect(lfoGain); lfoGain.connect(g.gain);
+      o1.connect(g); o2.connect(g); g.connect(bgmGain);
+      o1.start(); o2.start(); lfo.start();
+      bgmNodes = {o1,o2,lfo,g};
+    }
+    function stopBgmAmbient(){
+      if (!bgmNodes) return;
+      bgmNodes.o1.stop(); bgmNodes.o2.stop(); bgmNodes.lfo.stop();
+      bgmNodes = null;
+    }
+
+    // -- Pop BGM: bright looping arpeggio + light beat --
+    function startBgmPop(){
+      ensure();
+      if (bgmPopTimer) return;
+      const notes = [523.25, 659.25, 783.99, 659.25, 880.00, 783.99, 659.25, 987.77];
+      const bpm = 132;
+      const stepDur = 60/bpm/2; // eighth notes
+      let idx = 0;
+      bgmPopTimer = setInterval(() => {
+        const f = notes[idx % notes.length];
+        tone(f, stepDur*0.85, 'triangle', 0.14, bgmGain);
+        if (idx % 4 === 0) tone(f/2, stepDur*1.6, 'sine', 0.1, bgmGain);
+        if (idx % 2 === 1) tone(1600, 0.02, 'square', 0.03, bgmGain);
+        idx++;
+      }, stepDur*1000);
+    }
+    function stopBgmPop(){
+      if (!bgmPopTimer) return;
+      clearInterval(bgmPopTimer);
+      bgmPopTimer = null;
+    }
+
+    function startBgm(mode){
+      if (mode) settings.bgmMode = mode;
+      stopBgmAmbient(); stopBgmPop();
+      if (settings.bgmMode === 'pop') startBgmPop(); else startBgmAmbient();
+      persist();
+    }
+    function stopBgm(){ stopBgmAmbient(); stopBgmPop(); }
+    function isBgmPlaying(){ return !!bgmNodes || !!bgmPopTimer; }
+
+    function setTheme(t){ settings.theme = t; persist(); }
+    function setOrbColor(c){ settings.orbColor = c; persist(); }
+
+    return { ensure, setVol, jump, coin, chest, tierUp, hit, click, startBgm, stopBgm, isBgmPlaying, setTheme, setOrbColor, get settings(){return settings;} };
+  })();
+
+  // ---- Game State ----
+  let running = false;
+  let score = 0, coins = 0, best = 0;
+  let sessionTotalCoins = 0;
+  let orb, walls, particles, trail;
+  let spawnTimer = 0;
+  let elapsed = 0;
+  let nextChestScore = 15;
+  let lastPatternTier = -1;
+  let shake = 0;
+  let starLayers = [];
+
+  const THEMES = {
+    dark: {
+      bgBottom: '#05070a',
+      telegraph: '#4FF7D1',
+      palette: [
+        { top:'#0b1420', wall:'#4FF7D1', orb:'#4FF7D1' },
+        { top:'#0b1a24', wall:'#4FF7D1', orb:'#63f2ff' },
+        { top:'#141227', wall:'#9d7bff', orb:'#b39bff' },
+        { top:'#1d0f1e', wall:'#FF3D8A', orb:'#ff77b0' },
+        { top:'#230a0a', wall:'#ff5b3d', orb:'#ffb199' },
+      ]
+    },
+    bright: {
+      bgBottom: '#f4efe4',
+      telegraph: '#ff6b00',
+      palette: [
+        { top:'#fdf8ec', wall:'#1f2a44', orb:'#ff3d7a' },
+        { top:'#eef6f3', wall:'#134a6b', orb:'#ffb400' },
+        { top:'#f5f0fb', wall:'#3d2a63', orb:'#00c2a8' },
+        { top:'#fdf1e6', wall:'#5c2418', orb:'#ffe14d' },
+        { top:'#fbeaea', wall:'#5c1030', orb:'#00c2ff' },
+      ]
+    }
+  };
+
+  const startScreen = document.getElementById('startScreen');
+  const gameOverScreen = document.getElementById('gameOverScreen');
+  const adScreen = document.getElementById('adScreen');
+  const scoreVal = document.getElementById('scoreVal');
+  const coinVal = document.getElementById('coinVal');
+  const diffFill = document.getElementById('diffFill');
+  const chestPop = document.getElementById('chestPop');
+  const chestAmt = document.getElementById('chestAmt');
+  const hint = document.getElementById('hint');
+
+  function reset(){
+    score = 0; coins = 0; elapsed = 0; spawnTimer = 0; nextChestScore = 15; lastPatternTier = -1;
+    shake = 0;
+    orb = { x: 90, y: 300, vy: 0, r: 10 };
+    walls = [];
+    particles = [];
+    trail = [];
+    starLayers = [0,1,2].map(i => {
+      const arr = [];
+      const n = 14 + i*6;
+      for(let k=0;k<n;k++) arr.push({ x: Math.random()*1000, y: Math.random()*1000 });
+      return arr;
+    });
+  }
+
+  // difficulty tiers unlock new obstacle behaviors -> implicit learning curve
+  function difficultyTier(){
+    if (elapsed < 8) return 0;      // simple single gaps
+    if (elapsed < 18) return 1;     // moving gaps
+    if (elapsed < 32) return 2;     // narrow gaps
+    if (elapsed < 50) return 3;     // double walls
+    return 4;                        // fast + moving + narrow
+  }
+
+  function speedFor(tier){ return 2.6 + tier*0.55; }
+  function gapFor(tier){ return Math.max(150 - tier*18, 90); }
+
+  function hexToRgba(hex, a){
+    const h = hex.replace('#','');
+    const r = parseInt(h.substring(0,2),16);
+    const g = parseInt(h.substring(2,4),16);
+    const b = parseInt(h.substring(4,6),16);
+    return `rgba(${r},${g},${b},${a})`;
+  }
+
+  function spawnWall(tier){
+    const gap = gapFor(tier);
+    const margin = 40;
+    let gapY = margin + Math.random()*( (H/devicePixelRatio) - gap - margin*2);
+    const wallH = H/devicePixelRatio;
+
+    // preview flash: telegraph before wall becomes solid (implicit cue)
+    walls.push({
+      x: (W/devicePixelRatio) + 20,
+      gapY, gap,
+      width: 26,
+      moving: tier >= 1,
+      phase: Math.random()*Math.PI*2,
+      passed:false,
+      born: elapsed,
+      telegraph: true
+    });
+  }
+
+  function popChest(amount){
+    chestAmt.textContent = '+' + amount;
+    chestPop.classList.add('show');
+    setTimeout(()=> chestPop.classList.remove('show'), 1100);
+  }
+
+  function update(dt){
+    elapsed += dt;
+    const tier = difficultyTier();
+    if (tier !== lastPatternTier){
+      const isFirstTier = lastPatternTier === -1;
+      lastPatternTier = tier;
+      // brief screen pulse when a new pattern tier begins (learning cue)
+      particles.push({type:'tierFlash', life:0.6, max:0.6});
+      if (!isFirstTier) Audio_.tierUp();
+    }
+
+    // trail (visual freshness: glowing tail behind the orb)
+    trail.push({ x: orb.x, y: orb.y, life: 0.35, max:0.35 });
+    trail = trail.filter(p => (p.life -= dt) > 0);
+    if (shake > 0) shake = Math.max(0, shake - dt*3);
+
+    // physics
+    orb.vy += 22*dt;
+    orb.y += orb.vy*dt*60*0.5;
+    if (orb.y < orb.r){ orb.y = orb.r; orb.vy = 0; }
+    const floor = (H/devicePixelRatio) - orb.r;
+    if (orb.y > floor){ gameOver(); return; }
+
+    // spawn
+    spawnTimer -= dt;
+    if (spawnTimer <= 0){
+      spawnWall(tier);
+      spawnTimer = Math.max(1.4 - tier*0.15, 0.75);
+    }
+
+    const spd = speedFor(tier)*60*dt;
+    for (const w of walls){
+      w.x -= spd;
+      if (w.moving) w.gapY += Math.sin(elapsed*1.6 + w.phase)*0.6;
+      if (w.telegraph && elapsed - w.born > 0.35) w.telegraph = false;
+
+      if (!w.passed && w.x + w.width < orb.x - orb.r){
+        w.passed = true;
+        score += 1;
+        if (Math.random() < 0.55){
+          coins += 1;
+          particles.push({type:'coinPop', x: orb.x, y: orb.y, life:0.4, max:0.4});
+          Audio_.coin();
+        }
+        if (score >= nextChestScore){
+          const bonus = 8 + Math.floor(Math.random()*10) + tier*3;
+          coins += bonus;
+          popChest(bonus);
+          Audio_.chest();
+          nextChestScore += 15 + tier*5;
+        }
+      }
+
+      // collision
+      const wallH = H/devicePixelRatio;
+      const withinX = orb.x + orb.r > w.x && orb.x - orb.r < w.x + w.width;
+      if (withinX){
+        const inGap = orb.y - orb.r > w.gapY && orb.y + orb.r < w.gapY + w.gap;
+        if (!inGap){ shake = 1; Audio_.hit(); gameOver(); return; }
+      }
+    }
+    walls = walls.filter(w => w.x + w.width > -20);
+    particles = particles.filter(p => (p.life -= dt) > 0);
+
+    scoreVal.textContent = score;
+    coinVal.textContent = coins;
+    diffFill.style.width = Math.min(100, (elapsed/60)*100) + '%';
+  }
+
+  function draw(){
+    const w = W/devicePixelRatio, h = H/devicePixelRatio;
+    const tier = difficultyTier();
+    const theme = THEMES[Audio_.settings.theme] || THEMES.dark;
+    const pal = theme.palette[Math.min(tier, theme.palette.length-1)];
+    const orbColor = Audio_.settings.orbColor || pal.orb;
+
+    ctx.save();
+    if (shake > 0){
+      const sx = (Math.random()-0.5)*10*shake;
+      const sy = (Math.random()-0.5)*10*shake;
+      ctx.translate(sx, sy);
+    }
+
+    ctx.clearRect(-20,-20,w+40,h+40);
+
+    // background tunnel gradient breathing with difficulty
+    const grad = ctx.createLinearGradient(0,0,0,h);
+    grad.addColorStop(0, pal.top);
+    grad.addColorStop(1, theme.bgBottom);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0,0,w,h);
+
+    // parallax star layers (novelty: depth + speed variety per layer)
+    const starAlphaBase = Audio_.settings.theme === 'bright' ? 0.06 : 0.04;
+    starLayers.forEach((layer, li) => {
+      const speed = 8 + li*14;
+      const size = 1 + li*0.6;
+      ctx.fillStyle = Audio_.settings.theme === 'bright'
+        ? `rgba(0,0,0,${starAlphaBase + li*0.02})`
+        : `rgba(255,255,255,${starAlphaBase + li*0.03})`;
+      for (const s of layer){
+        const x = ((s.x - elapsed*speed) % w + w) % w;
+        const y = (s.y % h + h) % h;
+        ctx.fillRect(x, y, size, size);
+      }
+    });
+
+    // walls
+    for (const wl of walls){
+      ctx.fillStyle = wl.telegraph ? hexToRgba(theme.telegraph, 0.35) : pal.wall;
+      // top
+      ctx.fillRect(wl.x, 0, wl.width, wl.gapY);
+      // bottom
+      ctx.fillRect(wl.x, wl.gapY + wl.gap, wl.width, h - (wl.gapY+wl.gap));
+      if (wl.telegraph){
+        ctx.strokeStyle = theme.telegraph;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(wl.x, wl.gapY, wl.width, wl.gap);
+      }
+    }
+
+    // orb trail (novelty: glowing tail)
+    for (const p of trail){
+      const a = p.life/p.max;
+      ctx.beginPath();
+      ctx.fillStyle = orbColor;
+      ctx.globalAlpha = a*0.35;
+      ctx.arc(p.x, p.y, orb.r*a, 0, Math.PI*2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // orb
+    ctx.beginPath();
+    ctx.fillStyle = orbColor;
+    ctx.shadowColor = orbColor;
+    ctx.shadowBlur = 16;
+    ctx.arc(orb.x, orb.y, orb.r, 0, Math.PI*2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // tier flash / coin pop particles
+    for (const p of particles){
+      if (p.type === 'tierFlash'){
+        ctx.fillStyle = `rgba(255,200,87,${p.life/p.max*0.15})`;
+        ctx.fillRect(0,0,w,h);
+      }
+      if (p.type === 'coinPop'){
+        ctx.fillStyle = `rgba(255,200,87,${p.life/p.max})`;
+        ctx.font = '14px sans-serif';
+        ctx.fillText('+1', p.x+12, p.y - (p.max-p.life)*30);
+      }
+    }
+    ctx.restore();
+  }
+
+  let lastTime = null;
+  function loop(t){
+    if (!running) return;
+    if (lastTime === null) lastTime = t;
+    const dt = Math.min((t-lastTime)/1000, 0.05);
+    lastTime = t;
+    update(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  function flap(){
+    if (!running) return;
+    orb.vy = -7.6;
+    Audio_.jump();
+  }
+
+  function gameOver(){
+    running = false;
+    Audio_.stopBgm();
+    best = Math.max(best, score);
+    sessionTotalCoins += coins;
+    document.getElementById('finalScore').textContent = score;
+    document.getElementById('bestScore').textContent = best;
+    document.getElementById('finalCoins').textContent = coins;
+    gameOverScreen.classList.remove('hidden');
+  }
+
+  function startGame(){
+    Audio_.ensure();
+    Audio_.startBgm();
+    resize();
+    reset();
+    startScreen.classList.add('hidden');
+    gameOverScreen.classList.add('hidden');
+    adScreen.classList.add('hidden');
+    running = true;
+    lastTime = null;
+    requestAnimationFrame(loop);
+  }
+
+  document.getElementById('startBtn').onclick = () => { Audio_.click(); startGame(); };
+  document.getElementById('retryBtn').onclick = () => { Audio_.click(); startGame(); };
+
+  document.getElementById('adBtn').onclick = () => {
+    Audio_.click();
+    gameOverScreen.classList.add('hidden');
+    adScreen.classList.remove('hidden');
+    let n = 5;
+    document.getElementById('adCountdown').textContent = n;
+    const iv = setInterval(() => {
+      n -= 1;
+      document.getElementById('adCountdown').textContent = n;
+      if (n <= 0){
+        clearInterval(iv);
+        coins *= 2;
+        adScreen.classList.add('hidden');
+        gameOverScreen.classList.remove('hidden');
+        document.getElementById('finalCoins').textContent = coins;
+      }
+    }, 1000);
+  };
+
+  // ---- Settings panel wiring ----
+  const settingsBtn = document.getElementById('settingsBtn');
+  const settingsBtnStart = document.getElementById('settingsBtnStart');
+  const settingsBtnOver = document.getElementById('settingsBtnOver');
+  const settingsPanel = document.getElementById('settingsPanel');
+  const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+  const masterSlider = document.getElementById('masterSlider');
+  const bgmSlider = document.getElementById('bgmSlider');
+  const seSlider = document.getElementById('seSlider');
+  const masterVal = document.getElementById('masterVal');
+  const bgmVal = document.getElementById('bgmVal');
+  const seVal = document.getElementById('seVal');
+
+  masterSlider.value = Audio_.settings.master;
+  bgmSlider.value = Audio_.settings.bgm;
+  seSlider.value = Audio_.settings.se;
+  masterVal.textContent = Audio_.settings.master + '%';
+  bgmVal.textContent = Audio_.settings.bgm + '%';
+  seVal.textContent = Audio_.settings.se + '%';
+
+  const bgmAmbientBtn = document.getElementById('bgmAmbientBtn');
+  const bgmPopBtn = document.getElementById('bgmPopBtn');
+  const themeDarkBtn = document.getElementById('themeDarkBtn');
+  const themeBrightBtn = document.getElementById('themeBrightBtn');
+
+  function refreshToggleUI(){
+    bgmAmbientBtn.classList.toggle('active', Audio_.settings.bgmMode === 'ambient');
+    bgmPopBtn.classList.toggle('active', Audio_.settings.bgmMode === 'pop');
+    themeDarkBtn.classList.toggle('active', Audio_.settings.theme === 'dark');
+    themeBrightBtn.classList.toggle('active', Audio_.settings.theme === 'bright');
+    wrap.setAttribute('data-theme', Audio_.settings.theme);
+  }
+  refreshToggleUI();
+
+  bgmAmbientBtn.onclick = () => {
+    Audio_.click();
+    Audio_.startBgm('ambient');
+    refreshToggleUI();
+  };
+  bgmPopBtn.onclick = () => {
+    Audio_.click();
+    Audio_.startBgm('pop');
+    refreshToggleUI();
+  };
+  themeDarkBtn.onclick = () => { Audio_.click(); Audio_.setTheme('dark'); refreshToggleUI(); if(!running) draw(); };
+  themeBrightBtn.onclick = () => { Audio_.click(); Audio_.setTheme('bright'); refreshToggleUI(); if(!running) draw(); };
+
+  function openSettings(){
+    const wasRunning = running;
+    if (wasRunning) running = false; // pause while adjusting sound
+    settingsPanel.dataset.wasRunning = wasRunning ? '1':'0';
+    settingsPanel.classList.remove('hidden');
+  }
+  settingsBtn.onclick = openSettings;
+  settingsBtnStart.onclick = () => { Audio_.click(); openSettings(); };
+  settingsBtnOver.onclick = () => { Audio_.click(); openSettings(); };
+
+  closeSettingsBtn.onclick = () => {
+    Audio_.click();
+    settingsPanel.classList.add('hidden');
+    if (settingsPanel.dataset.wasRunning === '1'){
+      running = true;
+      lastTime = null;
+      requestAnimationFrame(loop);
+    }
+  };
+  masterSlider.oninput = () => { Audio_.setVol('master', +masterSlider.value); masterVal.textContent = masterSlider.value + '%'; };
+  bgmSlider.oninput = () => { Audio_.setVol('bgm', +bgmSlider.value); bgmVal.textContent = bgmSlider.value + '%'; };
+  seSlider.oninput = () => { Audio_.setVol('se', +seSlider.value); seVal.textContent = seSlider.value + '%'; Audio_.jump(); };
+
+  // ---- Orb color picker ----
+  const ORB_COLORS = ['#4FF7D1','#ff3d7a','#ffb400','#b39bff','#00c2a8','#ffffff','#ff5b3d','#00c2ff'];
+  const orbPreview = document.getElementById('orbPreview');
+  const swatchGrid = document.getElementById('swatchGrid');
+  const colorScreen = document.getElementById('colorScreen');
+  const colorPickBtn = document.getElementById('colorPickBtn');
+  const colorBackBtn = document.getElementById('colorBackBtn');
+
+  function currentOrbDisplayColor(){
+    if (Audio_.settings.orbColor) return Audio_.settings.orbColor;
+    const theme = THEMES[Audio_.settings.theme] || THEMES.dark;
+    return theme.palette[0].orb;
+  }
+  function updateOrbPreview(){
+    const c = currentOrbDisplayColor();
+    orbPreview.style.background = c;
+    orbPreview.style.color = c;
+  }
+
+  function buildSwatches(){
+    swatchGrid.innerHTML = '';
+    const autoBtn = document.createElement('div');
+    autoBtn.className = 'swatch auto' + (!Audio_.settings.orbColor ? ' active' : '');
+    autoBtn.title = 'オート(ティアごとに変化)';
+    autoBtn.onclick = () => { Audio_.click(); Audio_.setOrbColor(null); buildSwatches(); updateOrbPreview(); };
+    swatchGrid.appendChild(autoBtn);
+
+    ORB_COLORS.forEach(c => {
+      const el = document.createElement('div');
+      el.className = 'swatch' + (Audio_.settings.orbColor === c ? ' active' : '');
+      el.style.background = c;
+      el.style.color = c;
+      el.onclick = () => { Audio_.click(); Audio_.setOrbColor(c); buildSwatches(); updateOrbPreview(); };
+      swatchGrid.appendChild(el);
+    });
+  }
+  buildSwatches();
+  updateOrbPreview();
+
+  colorPickBtn.onclick = () => {
+    Audio_.click();
+    startScreen.classList.add('hidden');
+    colorScreen.classList.remove('hidden');
+  };
+  colorBackBtn.onclick = () => {
+    Audio_.click();
+    colorScreen.classList.add('hidden');
+    startScreen.classList.remove('hidden');
+  };
+
+  window.addEventListener('keydown', e => { if (e.code === 'Space'){ e.preventDefault(); flap(); }});
+  wrap.addEventListener('mousedown', e => { if (e.target === settingsBtn || settingsBtn.contains(e.target)) return; flap(); });
+  wrap.addEventListener('touchstart', e => {
+    if (e.target === settingsBtn || settingsBtn.contains(e.target)) return;
+    e.preventDefault(); flap();
+  }, {passive:false});
+
+  resize();
+  reset();
+  draw();
+})();
+</script>
+</body>
+</html>
