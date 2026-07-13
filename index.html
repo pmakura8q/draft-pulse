@@ -2,6 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>DRIFT PULSE</title>
 <style>
   :root{
@@ -21,10 +22,13 @@
     color:var(--ink);
     overflow:hidden;
     display:flex;align-items:center;justify-content:center;
+    touch-action:none;
+    overscroll-behavior:none;
   }
   #wrap{
     position:relative;
     height:94vh;
+    height:94dvh;
     width:auto;
     max-width:95vw;
     aspect-ratio: 3/4;
@@ -33,7 +37,7 @@
     box-shadow:0 0 0 1px rgba(255,255,255,0.06), 0 30px 80px rgba(0,0,0,0.6);
     background:#05070a;
   }
-  canvas{display:block;width:100%;height:100%;}
+  canvas{display:block;width:100%;height:100%;touch-action:none;}
 
   #wrap[data-theme="bright"] .hud .stat{ color:#8a7f6b; }
   #wrap[data-theme="bright"] .hud .stat b{ color:#2e2a22; }
@@ -367,11 +371,14 @@
   const wrap = document.getElementById('wrap');
 
   let W, H;
+  let scaleS = 1; // scale factor relative to a 640px-tall reference canvas, keeps difficulty feel consistent across screen sizes
+  const REF_H = 640;
   function resize(){
     const rect = wrap.getBoundingClientRect();
     W = canvas.width = rect.width * devicePixelRatio;
     H = canvas.height = rect.height * devicePixelRatio;
     ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+    scaleS = (H/devicePixelRatio) / REF_H;
   }
   window.addEventListener('resize', resize);
 
@@ -379,9 +386,8 @@
   const Audio_ = (() => {
     let ctxA = null;
     let master, bgmGain, seGain;
-    let bgmNodes = null;
     let bgmPopTimer = null;
-    let settings = { master:70, bgm:50, se:80, theme:'dark', bgmMode:'ambient', orbColor:null };
+    let settings = { master:70, bgm:50, se:80, theme:'dark', bgmMode:'pop', orbColor:null };
     try{
       const saved = JSON.parse(localStorage.getItem('driftpulse_audio') || 'null');
       if (saved) settings = Object.assign(settings, saved);
@@ -453,29 +459,55 @@
     }
     function click(){ tone(400, 0.05, 'square', 0.12); }
 
-    // -- Ambient BGM: slow detuned drone --
+    // -- Ambient BGM: slow evolving chord pad (replaces old static drone) --
+    let bgmAmbientTimer = null;
+    let bgmAmbientFilter = null;
     function startBgmAmbient(){
       ensure();
-      if (bgmNodes) return;
-      const o1 = ctxA.createOscillator();
-      const o2 = ctxA.createOscillator();
-      const g = ctxA.createGain();
-      o1.type='sine'; o2.type='sine';
-      o1.frequency.value = 110; o2.frequency.value = 110*1.5;
-      g.gain.value = 0.12;
-      const lfo = ctxA.createOscillator();
-      const lfoGain = ctxA.createGain();
-      lfo.frequency.value = 0.12;
-      lfoGain.gain.value = 0.05;
-      lfo.connect(lfoGain); lfoGain.connect(g.gain);
-      o1.connect(g); o2.connect(g); g.connect(bgmGain);
-      o1.start(); o2.start(); lfo.start();
-      bgmNodes = {o1,o2,lfo,g};
+      if (bgmAmbientTimer) return;
+      bgmAmbientFilter = ctxA.createBiquadFilter();
+      bgmAmbientFilter.type = 'lowpass';
+      bgmAmbientFilter.frequency.value = 1400;
+      bgmAmbientFilter.Q.value = 0.3;
+      bgmAmbientFilter.connect(bgmGain);
+
+      // gentle 4-chord loop (Am7 - Fmaj7 - Cmaj7 - G), voiced softly
+      const chords = [
+        [220.00, 261.63, 329.63, 392.00], // Am7
+        [174.61, 220.00, 261.63, 349.23], // Fmaj7
+        [130.81, 164.81, 196.00, 261.63], // Cmaj7
+        [196.00, 246.94, 293.66, 392.00], // G
+      ];
+      const chordDur = 6.0;
+      let idx = 0;
+
+      function playChord(){
+        const freqs = chords[idx % chords.length];
+        idx++;
+        const t0 = ctxA.currentTime;
+        freqs.forEach((f, i) => {
+          const osc = ctxA.createOscillator();
+          osc.type = 'triangle';
+          osc.frequency.value = f;
+          osc.detune.value = (i - freqs.length/2) * 3; // subtle, non-dissonant width
+          const g = ctxA.createGain();
+          const peak = 0.06 - i*0.008;
+          g.gain.setValueAtTime(0.0001, t0);
+          g.gain.exponentialRampToValueAtTime(Math.max(peak,0.02), t0 + 1.8);
+          g.gain.setValueAtTime(Math.max(peak,0.02), t0 + chordDur - 2.0);
+          g.gain.exponentialRampToValueAtTime(0.0001, t0 + chordDur);
+          osc.connect(g); g.connect(bgmAmbientFilter);
+          osc.start(t0); osc.stop(t0 + chordDur + 0.1);
+        });
+      }
+      playChord();
+      bgmAmbientTimer = setInterval(playChord, chordDur*1000);
     }
     function stopBgmAmbient(){
-      if (!bgmNodes) return;
-      bgmNodes.o1.stop(); bgmNodes.o2.stop(); bgmNodes.lfo.stop();
-      bgmNodes = null;
+      if (!bgmAmbientTimer) return;
+      clearInterval(bgmAmbientTimer);
+      bgmAmbientTimer = null;
+      bgmAmbientFilter = null;
     }
 
     // -- Pop BGM: bright looping arpeggio + light beat --
@@ -507,7 +539,7 @@
       persist();
     }
     function stopBgm(){ stopBgmAmbient(); stopBgmPop(); }
-    function isBgmPlaying(){ return !!bgmNodes || !!bgmPopTimer; }
+    function isBgmPlaying(){ return !!bgmAmbientTimer || !!bgmPopTimer; }
 
     function setTheme(t){ settings.theme = t; persist(); }
     function setOrbColor(c){ settings.orbColor = c; persist(); }
@@ -565,7 +597,7 @@
   function reset(){
     score = 0; coins = 0; elapsed = 0; spawnTimer = 0; nextChestScore = 15; lastPatternTier = -1;
     shake = 0;
-    orb = { x: 90, y: 300, vy: 0, r: 10 };
+    orb = { x: 90*scaleS, y: (H/devicePixelRatio)*0.4, vy: 0, r: 10*scaleS };
     walls = [];
     particles = [];
     trail = [];
@@ -586,8 +618,10 @@
     return 4;                        // fast + moving + narrow
   }
 
-  function speedFor(tier){ return 2.6 + tier*0.55; }
-  function gapFor(tier){ return Math.max(150 - tier*18, 90); }
+  // gap/speed are expressed relative to the reference 640px-tall canvas, then
+  // scaled by scaleS so the felt difficulty stays the same on any screen size
+  function speedFor(tier){ return (2.6 + tier*0.55) * scaleS; }
+  function gapFor(tier){ return Math.max(150 - tier*18, 90) * scaleS; }
 
   function hexToRgba(hex, a){
     const h = hex.replace('#','');
@@ -599,7 +633,7 @@
 
   function spawnWall(tier){
     const gap = gapFor(tier);
-    const margin = 40;
+    const margin = 40*scaleS;
     let gapY = margin + Math.random()*( (H/devicePixelRatio) - gap - margin*2);
     const wallH = H/devicePixelRatio;
 
@@ -607,7 +641,7 @@
     walls.push({
       x: (W/devicePixelRatio) + 20,
       gapY, gap,
-      width: 26,
+      width: 26*scaleS,
       moving: tier >= 1,
       phase: Math.random()*Math.PI*2,
       passed:false,
@@ -638,8 +672,8 @@
     trail = trail.filter(p => (p.life -= dt) > 0);
     if (shake > 0) shake = Math.max(0, shake - dt*3);
 
-    // physics
-    orb.vy += 22*dt;
+    // physics (gravity scaled so fall speed feels the same on any screen size)
+    orb.vy += 22*scaleS*dt;
     orb.y += orb.vy*dt*60*0.5;
     if (orb.y < orb.r){ orb.y = orb.r; orb.vy = 0; }
     const floor = (H/devicePixelRatio) - orb.r;
@@ -649,7 +683,7 @@
     spawnTimer -= dt;
     if (spawnTimer <= 0){
       spawnWall(tier);
-      spawnTimer = Math.max(1.4 - tier*0.15, 0.75);
+      spawnTimer = Math.max(1.9 - tier*0.14, 1.1);
     }
 
     const spd = speedFor(tier)*60*dt;
@@ -791,7 +825,7 @@
 
   function flap(){
     if (!running) return;
-    orb.vy = -7.6;
+    orb.vy = -7.6*scaleS;
     Audio_.jump();
   }
 
@@ -962,9 +996,14 @@
   };
 
   window.addEventListener('keydown', e => { if (e.code === 'Space'){ e.preventDefault(); flap(); }});
-  wrap.addEventListener('mousedown', e => { if (e.target === settingsBtn || settingsBtn.contains(e.target)) return; flap(); });
+
+  function isInteractiveTarget(target){
+    return !!target.closest('button, input, .swatch, .toggle-btn, .icon-btn, .settings-panel, .overlay');
+  }
+
+  wrap.addEventListener('mousedown', e => { if (isInteractiveTarget(e.target)) return; flap(); });
   wrap.addEventListener('touchstart', e => {
-    if (e.target === settingsBtn || settingsBtn.contains(e.target)) return;
+    if (isInteractiveTarget(e.target)) return; // let buttons/sliders/overlays receive their own tap
     e.preventDefault(); flap();
   }, {passive:false});
 
