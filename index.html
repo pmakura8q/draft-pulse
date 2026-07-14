@@ -258,8 +258,13 @@
   .swatch-grid{
     display:grid;
     grid-template-columns:repeat(4, 1fr);
-    gap:16px;
-    margin:20px 0 26px;
+    gap:18px;
+    margin:16px 0 22px;
+  }
+  .swatch-item{
+    position:relative;
+    display:flex; flex-direction:column; align-items:center;
+    gap:4px;
   }
   .swatch{
     width:48px; height:48px;
@@ -267,6 +272,7 @@
     border:2px solid rgba(255,255,255,0.15);
     cursor:pointer;
     box-shadow:0 0 10px rgba(0,0,0,0.3);
+    position:relative;
   }
   .swatch.active{
     border-color:#fff;
@@ -275,6 +281,82 @@
   .swatch.auto{
     background:conic-gradient(#4FF7D1,#9d7bff,#FF3D8A,#ff5b3d,#4FF7D1);
   }
+  .swatch.locked{ opacity:0.35; }
+  .swatch-price{
+    font-size:10px; color:var(--gold); letter-spacing:0.03em;
+  }
+  .shop-tabs{ display:flex; gap:8px; margin-bottom:6px; }
+  .shop-section-label{
+    font-size:11px; color:var(--dim); letter-spacing:0.1em;
+    text-transform:uppercase; margin:14px 0 4px; text-align:left; width:100%;
+  }
+  .wallet{
+    display:inline-flex; align-items:center; gap:6px;
+    font-size:13px; color:var(--gold);
+    background:rgba(255,200,87,0.08);
+    border:1px solid rgba(255,200,87,0.25);
+    border-radius:999px;
+    padding:6px 14px;
+    margin-bottom:18px;
+  }
+  .mode-row{ display:flex; gap:12px; width:100%; max-width:320px; }
+  .mode-row .btn{ flex:1; margin-top:0; }
+  .overlay{ overflow-y:auto; }
+
+  .stage-list{
+    width:100%; max-width:360px;
+    display:flex; flex-direction:column; gap:10px;
+    margin:16px 0 22px;
+  }
+  .stage-card{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:14px 16px;
+    border:1px solid rgba(255,255,255,0.14);
+    border-radius:12px;
+    background:rgba(255,255,255,0.03);
+    cursor:pointer;
+    text-align:left;
+  }
+  .stage-card:hover{ border-color:var(--cyan); }
+  .stage-card.locked{ opacity:0.4; cursor:default; }
+  .stage-card .left{ display:flex; flex-direction:column; gap:2px; }
+  .stage-card .num{
+    font-family:'Segoe UI',sans-serif; font-weight:800; font-size:15px; color:var(--ink);
+  }
+  .stage-card .desc{ font-size:11px; color:var(--dim); max-width:210px; }
+  .stage-card .meta{ font-size:11px; color:var(--gold); white-space:nowrap; }
+  .stage-card .meta.done{ color:var(--cyan); }
+
+  .stage-grid{
+    display:flex; flex-direction:column; gap:10px;
+    width:100%; max-width:340px;
+    margin:18px 0 22px;
+  }
+  .stage-card{
+    display:flex; align-items:center; gap:14px;
+    padding:14px 16px;
+    border-radius:14px;
+    border:1px solid rgba(255,255,255,0.12);
+    background:rgba(255,255,255,0.03);
+    cursor:pointer;
+    text-align:left;
+  }
+  .stage-card.locked{
+    opacity:0.4;
+    cursor:default;
+  }
+  .stage-card .num{
+    font-family:'Segoe UI',sans-serif;
+    font-weight:800; font-size:22px;
+    color:var(--cyan);
+    width:32px; text-align:center;
+    flex-shrink:0;
+  }
+  .stage-card .info{ flex:1; }
+  .stage-card .name{ font-weight:700; font-size:14px; color:var(--ink); }
+  .stage-card .desc{ font-size:11px; color:var(--dim); margin-top:2px; }
+  .stage-card .target{ font-size:11px; color:var(--gold); margin-top:2px; }
+  .stage-card .lock-icon{ font-size:18px; color:var(--dim); flex-shrink:0; }
 </style>
 </head>
 <body>
@@ -282,6 +364,7 @@
   <div class="difficulty-bar"><i id="diffFill"></i></div>
   <div class="hud">
     <div class="stat">SCORE<b id="scoreVal">0</b></div>
+    <div class="stat" id="targetStat" style="display:none;">TARGET<b id="targetVal">0</b></div>
     <div style="display:flex; align-items:flex-start; gap:14px; pointer-events:auto;">
       <div class="stat coins">COINS<b id="coinVal">0</b></div>
       <div class="icon-btn" id="settingsBtn" title="設定">⚙</div>
@@ -309,13 +392,6 @@
         <button class="toggle-btn" id="bgmPopBtn">ポップ</button>
       </div>
     </div>
-    <div class="slider-row">
-      <div class="slabel"><span>テーマ</span></div>
-      <div class="toggle-group">
-        <button class="toggle-btn" id="themeDarkBtn">ダーク</button>
-        <button class="toggle-btn" id="themeBrightBtn">ブライト</button>
-      </div>
-    </div>
     <button class="btn secondary" id="closeSettingsBtn">閉じる</button>
   </div>
 
@@ -331,36 +407,64 @@
   <div class="overlay" id="startScreen">
     <div class="title">DRIFT PULSE</div>
     <div class="subtitle">光の粒となり、トンネルを駆け抜けろ</div>
-    <div id="orbPreview" style="width:34px;height:34px;border-radius:50%;margin:0 auto 18px;box-shadow:0 0 16px currentColor;"></div>
-    <button class="btn" id="startBtn">START</button>
-    <button class="btn secondary" id="colorPickBtn">🎨 オーブの色を選ぶ</button>
+    <div class="wallet">🪙 <span id="walletVal">0</span></div>
+    <div id="orbPreview" style="width:34px;height:34px;border-radius:50%;margin:0 auto 14px;box-shadow:0 0 16px currentColor;"></div>
+    <div class="mode-row">
+      <button class="btn" id="startEndlessBtn">ENDLESS</button>
+      <button class="btn" id="startChallengeBtn">CHALLENGE</button>
+    </div>
+    <button class="btn secondary" id="colorPickBtn">🛍 ショップ</button>
     <button class="btn secondary" id="settingsBtnStart">⚙ 設定</button>
     <div class="subtitle" style="margin-top:18px;">前兆の光を見て、次の動きを読め</div>
   </div>
 
   <div class="overlay hidden" id="colorScreen">
-    <div class="label">ORB COLOR</div>
-    <div class="subtitle" style="margin-top:8px;">好きな色を選ぶか、ティアごとに自動で変わる「オート」のままでもOK</div>
+    <div class="label">SHOP</div>
+    <div class="wallet">🪙 <span id="walletValShop">0</span></div>
+
+    <div class="shop-section-label">オーブの色(コインで購入)</div>
     <div class="swatch-grid" id="swatchGrid"></div>
+
+    <div class="shop-section-label">背景(コインで購入)</div>
+    <div class="swatch-grid" id="bgSwatchGrid"></div>
+
+    <div class="shop-section-label">壁(コインで購入)</div>
+    <div class="swatch-grid" id="wallSwatchGrid"></div>
+
     <button class="btn secondary" id="colorBackBtn">戻る</button>
   </div>
 
+  <div class="overlay hidden" id="stageSelectScreen">
+    <div class="label">STAGE SELECT</div>
+    <div class="stage-grid" id="stageGrid"></div>
+    <button class="btn secondary" id="stageSelectBackBtn">戻る</button>
+  </div>
+
   <div class="overlay hidden" id="gameOverScreen">
-    <div class="label">RUN OVER</div>
+    <div class="label" id="gameOverLabel">RUN OVER</div>
     <div class="bignum" id="finalScore">0</div>
     <div class="row">
       <div class="rowitem"><span class="label">BEST</span><b id="bestScore">0</b></div>
       <div class="rowitem"><span class="label">COINS</span><b id="finalCoins">0</b></div>
     </div>
-    <button class="btn ad" id="adBtn">▶ 広告を見て続行(コイン2倍)</button>
     <button class="btn secondary" id="retryBtn">もう一度</button>
+    <button class="btn secondary" id="backToMenuBtn">モード選択に戻る</button>
     <button class="btn secondary" id="settingsBtnOver">⚙ 設定</button>
   </div>
 
-  <div class="overlay hidden" id="adScreen">
-    <div class="label">AD PLAYING</div>
-    <div class="bignum" id="adCountdown">5</div>
-    <div class="subtitle">※これは広告配置のモックです。実際の配信には広告SDK連携が必要です</div>
+  <div class="overlay hidden" id="stageClearScreen">
+    <div class="label" id="stageClearLabel">STAGE CLEAR</div>
+    <div class="bignum" id="stageClearBonus">+0</div>
+    <div class="subtitle">コインを獲得しました</div>
+    <button class="btn" id="nextStageBtn">次のステージへ</button>
+    <button class="btn secondary" id="stageClearToSelectBtn">ステージ選択に戻る</button>
+  </div>
+
+  <div class="overlay hidden" id="allClearScreen">
+    <div class="label">ALL CLEAR!</div>
+    <div class="subtitle" style="margin:8px 0 20px;">全ステージクリアおめでとうございます</div>
+    <button class="btn secondary" id="allClearToSelectBtn">ステージ選択に戻る</button>
+    <button class="btn secondary" id="allClearBackBtn">モード選択に戻る</button>
   </div>
 </div>
 
@@ -387,7 +491,7 @@
     let ctxA = null;
     let master, bgmGain, seGain;
     let bgmPopTimer = null;
-    let settings = { master:70, bgm:50, se:80, theme:'dark', bgmMode:'pop', orbColor:null };
+    let settings = { master:70, bgm:50, se:80, bgmMode:'pop' };
     try{
       const saved = JSON.parse(localStorage.getItem('driftpulse_audio') || 'null');
       if (saved) settings = Object.assign(settings, saved);
@@ -541,10 +645,7 @@
     function stopBgm(){ stopBgmAmbient(); stopBgmPop(); }
     function isBgmPlaying(){ return !!bgmAmbientTimer || !!bgmPopTimer; }
 
-    function setTheme(t){ settings.theme = t; persist(); }
-    function setOrbColor(c){ settings.orbColor = c; persist(); }
-
-    return { ensure, setVol, jump, coin, chest, tierUp, hit, click, startBgm, stopBgm, isBgmPlaying, setTheme, setOrbColor, get settings(){return settings;} };
+    return { ensure, setVol, jump, coin, chest, tierUp, hit, click, startBgm, stopBgm, isBgmPlaying, get settings(){return settings;} };
   })();
 
   // ---- Game State ----
@@ -558,41 +659,77 @@
   let lastPatternTier = -1;
   let shake = 0;
   let starLayers = [];
+  let gameMode = 'endless'; // 'endless' | 'challenge'
+  let currentStage = 0;
 
-  const THEMES = {
-    dark: {
-      bgBottom: '#05070a',
-      telegraph: '#4FF7D1',
-      palette: [
-        { top:'#0b1420', wall:'#4FF7D1', orb:'#4FF7D1' },
-        { top:'#0b1a24', wall:'#4FF7D1', orb:'#63f2ff' },
-        { top:'#141227', wall:'#9d7bff', orb:'#b39bff' },
-        { top:'#1d0f1e', wall:'#FF3D8A', orb:'#ff77b0' },
-        { top:'#230a0a', wall:'#ff5b3d', orb:'#ffb199' },
-      ]
-    },
-    bright: {
-      bgBottom: '#f4efe4',
-      telegraph: '#ff6b00',
-      palette: [
-        { top:'#fdf8ec', wall:'#1f2a44', orb:'#ff3d7a' },
-        { top:'#eef6f3', wall:'#134a6b', orb:'#ffb400' },
-        { top:'#f5f0fb', wall:'#3d2a63', orb:'#00c2a8' },
-        { top:'#fdf1e6', wall:'#5c2418', orb:'#ffe14d' },
-        { top:'#fbeaea', wall:'#5c1030', orb:'#00c2ff' },
-      ]
-    }
+  const STAGES = [
+    { label:'ステージ1', desc:'まずは基本。隙間は動かない', target:10, reward:20, tierCap:0, forceMovingOff:true,  gapMult:1.0,  gravityMult:1.0,  jumpMult:1.0 },
+    { label:'ステージ2', desc:'隙間が上下に動き始める',     target:18, reward:25, tierCap:1, forceMovingOff:false, gapMult:1.0,  gravityMult:1.0,  jumpMult:1.0 },
+    { label:'ステージ3', desc:'低重力・大ジャンプ、ふわふわ操作', target:20, reward:35, tierCap:1, forceMovingOff:false, gapMult:1.0,  gravityMult:0.62, jumpMult:1.3 },
+    { label:'ステージ4', desc:'重力が強く、ジャンプが重い', target:20, reward:40, tierCap:1, forceMovingOff:false, gapMult:1.05, gravityMult:1.55, jumpMult:0.78 },
+    { label:'ステージ5', desc:'隙間が最初から狭い',         target:24, reward:55, tierCap:2, forceMovingOff:false, gapMult:0.7,  gravityMult:1.0,  jumpMult:1.0 },
+  ];
+
+  // Backgrounds and walls are chosen independently in the shop, then combined at render time
+  const BACKGROUNDS = {
+    dark:   { cost:0,  mode:'dark',   bgBottom:'#05070a', tierTop:['#0b1420','#0b1a24','#141227','#1d0f1e','#230a0a'] },
+    bright: { cost:0,  mode:'bright', bgBottom:'#f4efe4', tierTop:['#fdf8ec','#eef6f3','#f5f0fb','#fdf1e6','#fbeaea'] },
+    sunset: { cost:60, mode:'dark',   bgBottom:'#160333', tierTop:['#2b1055','#3a0d59','#4a0e5c','#5c0f52','#6b1045'] },
+    mono:   { cost:50, mode:'dark',   bgBottom:'#000000', tierTop:['#1a1a1a','#161616','#121212','#0e0e0e','#0a0a0a'] },
+    aqua:   { cost:90, mode:'bright', bgBottom:'#a3d9ea', tierTop:['#e8fbff','#daf4fb','#cdeef7','#bfe7f3','#b0e0ef'] },
   };
+  const WALLS = {
+    cyan:   { cost:0,  telegraph:'#4FF7D1', tierWall:['#4FF7D1','#4FF7D1','#9d7bff','#FF3D8A','#ff5b3d'] },
+    navy:   { cost:0,  telegraph:'#ff6b00', tierWall:['#1f2a44','#134a6b','#3d2a63','#5c2418','#5c1030'] },
+    ember:  { cost:60, telegraph:'#ffd460', tierWall:['#ff7b54','#ff5e78','#ff3d68','#e0245e','#c81d5e'] },
+    slate:  { cost:50, telegraph:'#00d1ff', tierWall:['#7a7a7a','#666666','#565656','#454545','#333333'] },
+    marine: { cost:90, telegraph:'#ff6f61', tierWall:['#0a4f6b','#0d3b52','#123049','#14263c','#111c2e'] },
+  };
+  const ORB_COLORS = {
+    cyan:   { cost:0,  c:'#4FF7D1' },
+    pink:   { cost:30, c:'#ff3d7a' },
+    amber:  { cost:30, c:'#ffb400' },
+    violet: { cost:40, c:'#b39bff' },
+    teal:   { cost:40, c:'#00c2a8' },
+    white:  { cost:50, c:'#ffffff' },
+    ember2: { cost:50, c:'#ff5b3d' },
+    sky:    { cost:60, c:'#00c2ff' },
+  };
+
+  // ---- Progress store (persists bank coins / best score / stage progress / owned cosmetics on this device) ----
+  const Progress = (() => {
+    let data = {
+      bankCoins:0, bestScore:0, stageProgress:0,
+      ownedBackgrounds:['dark','bright'], ownedWalls:['cyan','navy'], ownedOrbColors:['cyan'],
+      activeBackground:'dark', activeWall:'cyan', activeOrbColor:'cyan'
+    };
+    try{
+      const saved = JSON.parse(localStorage.getItem('driftpulse_progress') || 'null');
+      if (saved) data = Object.assign(data, saved);
+    }catch(e){}
+    function persist(){ try{ localStorage.setItem('driftpulse_progress', JSON.stringify(data)); }catch(e){} }
+    function addCoins(n){ data.bankCoins += n; persist(); }
+    function spendCoins(n){ if (data.bankCoins >= n){ data.bankCoins -= n; persist(); return true; } return false; }
+    function own(listKey, key){ if (!data[listKey].includes(key)){ data[listKey].push(key); persist(); } }
+    function setActive(field, key){ data[field] = key; persist(); }
+    function setBest(s){ if (s > data.bestScore){ data.bestScore = s; persist(); } }
+    function unlockStage(idx){ if (idx > data.stageProgress){ data.stageProgress = idx; persist(); } }
+    return { addCoins, spendCoins, own, setActive, setBest, unlockStage, get data(){ return data; } };
+  })();
 
   const startScreen = document.getElementById('startScreen');
   const gameOverScreen = document.getElementById('gameOverScreen');
-  const adScreen = document.getElementById('adScreen');
+  const colorScreen = document.getElementById('colorScreen');
+  const stageSelectScreen = document.getElementById('stageSelectScreen');
+  const stageClearScreen = document.getElementById('stageClearScreen');
+  const allClearScreen = document.getElementById('allClearScreen');
   const scoreVal = document.getElementById('scoreVal');
   const coinVal = document.getElementById('coinVal');
   const diffFill = document.getElementById('diffFill');
   const chestPop = document.getElementById('chestPop');
   const chestAmt = document.getElementById('chestAmt');
   const hint = document.getElementById('hint');
+
 
   function reset(){
     score = 0; coins = 0; elapsed = 0; spawnTimer = 0; nextChestScore = 15; lastPatternTier = -1;
@@ -611,17 +748,32 @@
 
   // difficulty tiers unlock new obstacle behaviors -> implicit learning curve
   function difficultyTier(){
-    if (elapsed < 8) return 0;      // simple single gaps
-    if (elapsed < 18) return 1;     // moving gaps
-    if (elapsed < 32) return 2;     // narrow gaps
-    if (elapsed < 50) return 3;     // double walls
-    return 4;                        // fast + moving + narrow
+    let t;
+    if (elapsed < 8) t = 0;         // simple single gaps
+    else if (elapsed < 18) t = 1;   // moving gaps
+    else if (elapsed < 32) t = 2;   // narrow gaps
+    else if (elapsed < 50) t = 3;   // double walls
+    else t = 4;                      // fast + moving + narrow
+    if (gameMode === 'challenge') t = Math.min(t, STAGES[currentStage].tierCap);
+    return t;
   }
 
   // gap/speed are expressed relative to the reference 640px-tall canvas, then
   // scaled by scaleS so the felt difficulty stays the same on any screen size
   function speedFor(tier){ return (2.6 + tier*0.55) * scaleS; }
-  function gapFor(tier){ return Math.max(150 - tier*18, 90) * scaleS; }
+  function stageMod(){ return gameMode === 'challenge' ? STAGES[currentStage] : null; }
+  function gapFor(tier){
+    const m = stageMod();
+    const mult = m ? m.gapMult : 1;
+    return Math.max(150 - tier*18, 90) * scaleS * mult;
+  }
+  function gravityMult(){ const m = stageMod(); return m ? m.gravityMult : 1; }
+  function jumpMult(){ const m = stageMod(); return m ? m.jumpMult : 1; }
+  function movingAllowed(tier){
+    const m = stageMod();
+    if (m && m.forceMovingOff) return false;
+    return tier >= 1;
+  }
 
   function hexToRgba(hex, a){
     const h = hex.replace('#','');
@@ -642,7 +794,7 @@
       x: (W/devicePixelRatio) + 20,
       gapY, gap,
       width: 26*scaleS,
-      moving: tier >= 1,
+      moving: movingAllowed(tier),
       phase: Math.random()*Math.PI*2,
       passed:false,
       born: elapsed,
@@ -673,7 +825,7 @@
     if (shake > 0) shake = Math.max(0, shake - dt*3);
 
     // physics (gravity scaled so fall speed feels the same on any screen size)
-    orb.vy += 22*scaleS*dt;
+    orb.vy += 22*scaleS*gravityMult()*dt;
     orb.y += orb.vy*dt*60*0.5;
     if (orb.y < orb.r){ orb.y = orb.r; orb.vy = 0; }
     const floor = (H/devicePixelRatio) - orb.r;
@@ -683,7 +835,7 @@
     spawnTimer -= dt;
     if (spawnTimer <= 0){
       spawnWall(tier);
-      spawnTimer = Math.max(1.9 - tier*0.14, 1.1);
+      spawnTimer = Math.max(2.15 - tier*0.13, 1.3);
     }
 
     const spd = speedFor(tier)*60*dt;
@@ -707,6 +859,10 @@
           Audio_.chest();
           nextChestScore += 15 + tier*5;
         }
+        if (gameMode === 'challenge' && score >= STAGES[currentStage].target){
+          stageClear();
+          return;
+        }
       }
 
       // collision
@@ -728,9 +884,11 @@
   function draw(){
     const w = W/devicePixelRatio, h = H/devicePixelRatio;
     const tier = difficultyTier();
-    const theme = THEMES[Audio_.settings.theme] || THEMES.dark;
-    const pal = theme.palette[Math.min(tier, theme.palette.length-1)];
-    const orbColor = Audio_.settings.orbColor || pal.orb;
+    const bg = BACKGROUNDS[Progress.data.activeBackground] || BACKGROUNDS.dark;
+    const wl_ = WALLS[Progress.data.activeWall] || WALLS.cyan;
+    const orbColor = (ORB_COLORS[Progress.data.activeOrbColor] || ORB_COLORS.cyan).c;
+    const topColor = bg.tierTop[Math.min(tier, bg.tierTop.length-1)];
+    const wallColor = wl_.tierWall[Math.min(tier, wl_.tierWall.length-1)];
 
     ctx.save();
     if (shake > 0){
@@ -743,17 +901,18 @@
 
     // background tunnel gradient breathing with difficulty
     const grad = ctx.createLinearGradient(0,0,0,h);
-    grad.addColorStop(0, pal.top);
-    grad.addColorStop(1, theme.bgBottom);
+    grad.addColorStop(0, topColor);
+    grad.addColorStop(1, bg.bgBottom);
     ctx.fillStyle = grad;
     ctx.fillRect(0,0,w,h);
 
     // parallax star layers (novelty: depth + speed variety per layer)
-    const starAlphaBase = Audio_.settings.theme === 'bright' ? 0.06 : 0.04;
+    const isLight = bg.mode === 'bright';
+    const starAlphaBase = isLight ? 0.06 : 0.04;
     starLayers.forEach((layer, li) => {
       const speed = 8 + li*14;
       const size = 1 + li*0.6;
-      ctx.fillStyle = Audio_.settings.theme === 'bright'
+      ctx.fillStyle = isLight
         ? `rgba(0,0,0,${starAlphaBase + li*0.02})`
         : `rgba(255,255,255,${starAlphaBase + li*0.03})`;
       for (const s of layer){
@@ -765,13 +924,13 @@
 
     // walls
     for (const wl of walls){
-      ctx.fillStyle = wl.telegraph ? hexToRgba(theme.telegraph, 0.35) : pal.wall;
+      ctx.fillStyle = wl.telegraph ? hexToRgba(wl_.telegraph, 0.35) : wallColor;
       // top
       ctx.fillRect(wl.x, 0, wl.width, wl.gapY);
       // bottom
       ctx.fillRect(wl.x, wl.gapY + wl.gap, wl.width, h - (wl.gapY+wl.gap));
       if (wl.telegraph){
-        ctx.strokeStyle = theme.telegraph;
+        ctx.strokeStyle = wl_.telegraph;
         ctx.lineWidth = 2;
         ctx.strokeRect(wl.x, wl.gapY, wl.width, wl.gap);
       }
@@ -825,55 +984,137 @@
 
   function flap(){
     if (!running) return;
-    orb.vy = -7.6*scaleS;
+    orb.vy = -8.1*scaleS*jumpMult();
     Audio_.jump();
+  }
+
+  function updateWalletDisplays(){
+    const v = Progress.data.bankCoins;
+    const a = document.getElementById('walletVal');
+    const b = document.getElementById('walletValShop');
+    if (a) a.textContent = v;
+    if (b) b.textContent = v;
+  }
+
+  function hideAllOverlays(){
+    startScreen.classList.add('hidden');
+    gameOverScreen.classList.add('hidden');
+    colorScreen.classList.add('hidden');
+    stageSelectScreen.classList.add('hidden');
+    stageClearScreen.classList.add('hidden');
+    allClearScreen.classList.add('hidden');
+  }
+
+  function goHome(){
+    hideAllOverlays();
+    startScreen.classList.remove('hidden');
+    updateWalletDisplays();
+    if (!running) draw();
+  }
+
+  const stageGrid = document.getElementById('stageGrid');
+  function buildStageGrid(){
+    stageGrid.innerHTML = '';
+    STAGES.forEach((s, i) => {
+      const unlocked = i <= Progress.data.stageProgress;
+      const card = document.createElement('div');
+      card.className = 'stage-card' + (unlocked ? '' : ' locked');
+      card.innerHTML = `
+        <div class="num">${i+1}</div>
+        <div class="info">
+          <div class="name">${s.label}</div>
+          <div class="desc">${s.desc}</div>
+          <div class="target">目標スコア ${s.target} ・ 報酬 🪙${s.reward}</div>
+        </div>
+        <div class="lock-icon">${unlocked ? '▶' : '🔒'}</div>
+      `;
+      if (unlocked){
+        card.onclick = () => { Audio_.click(); startGame('challenge', i); };
+      }
+      stageGrid.appendChild(card);
+    });
+  }
+
+  function showStageSelect(){
+    hideAllOverlays();
+    buildStageGrid();
+    stageSelectScreen.classList.remove('hidden');
   }
 
   function gameOver(){
     running = false;
     Audio_.stopBgm();
-    best = Math.max(best, score);
-    sessionTotalCoins += coins;
+    Progress.addCoins(coins);
+    const label = document.getElementById('gameOverLabel');
+    const backBtn = document.getElementById('backToMenuBtn');
+    if (gameMode === 'endless'){
+      Progress.setBest(score);
+      best = Progress.data.bestScore;
+      label.textContent = 'RUN OVER';
+      backBtn.textContent = 'モード選択に戻る';
+    } else {
+      label.textContent = 'STAGE FAILED';
+      backBtn.textContent = 'ステージ選択に戻る';
+    }
     document.getElementById('finalScore').textContent = score;
-    document.getElementById('bestScore').textContent = best;
+    document.getElementById('bestScore').textContent = Progress.data.bestScore;
     document.getElementById('finalCoins').textContent = coins;
+    updateWalletDisplays();
     gameOverScreen.classList.remove('hidden');
   }
 
-  function startGame(){
+  function stageClear(){
+    running = false;
+    Audio_.stopBgm();
+    const reward = STAGES[currentStage].reward;
+    Progress.addCoins(coins + reward);
+    Progress.unlockStage(currentStage + 1);
+    updateWalletDisplays();
+    if (currentStage + 1 < STAGES.length){
+      document.getElementById('stageClearBonus').textContent = '+' + (coins + reward);
+      stageClearScreen.classList.remove('hidden');
+    } else {
+      allClearScreen.classList.remove('hidden');
+    }
+  }
+
+  function startGame(mode, stageIdx){
+    gameMode = mode || 'endless';
+    currentStage = (stageIdx != null) ? stageIdx : 0;
+    const targetStat = document.getElementById('targetStat');
+    const targetVal = document.getElementById('targetVal');
+    if (gameMode === 'challenge'){
+      targetStat.style.display = '';
+      targetVal.textContent = STAGES[currentStage].target;
+    } else {
+      targetStat.style.display = 'none';
+    }
     Audio_.ensure();
     Audio_.startBgm();
     resize();
     reset();
-    startScreen.classList.add('hidden');
-    gameOverScreen.classList.add('hidden');
-    adScreen.classList.add('hidden');
+    hideAllOverlays();
     running = true;
     lastTime = null;
     requestAnimationFrame(loop);
   }
 
-  document.getElementById('startBtn').onclick = () => { Audio_.click(); startGame(); };
-  document.getElementById('retryBtn').onclick = () => { Audio_.click(); startGame(); };
-
-  document.getElementById('adBtn').onclick = () => {
+  document.getElementById('startEndlessBtn').onclick = () => { Audio_.click(); startGame('endless'); };
+  document.getElementById('startChallengeBtn').onclick = () => { Audio_.click(); showStageSelect(); };
+  document.getElementById('stageSelectBackBtn').onclick = () => { Audio_.click(); goHome(); };
+  document.getElementById('retryBtn').onclick = () => { Audio_.click(); startGame(gameMode, currentStage); };
+  document.getElementById('backToMenuBtn').onclick = () => {
     Audio_.click();
-    gameOverScreen.classList.add('hidden');
-    adScreen.classList.remove('hidden');
-    let n = 5;
-    document.getElementById('adCountdown').textContent = n;
-    const iv = setInterval(() => {
-      n -= 1;
-      document.getElementById('adCountdown').textContent = n;
-      if (n <= 0){
-        clearInterval(iv);
-        coins *= 2;
-        adScreen.classList.add('hidden');
-        gameOverScreen.classList.remove('hidden');
-        document.getElementById('finalCoins').textContent = coins;
-      }
-    }, 1000);
+    if (gameMode === 'challenge') showStageSelect(); else goHome();
   };
+  document.getElementById('nextStageBtn').onclick = () => {
+    Audio_.click();
+    stageClearScreen.classList.add('hidden');
+    startGame('challenge', currentStage + 1);
+  };
+  document.getElementById('stageClearToSelectBtn').onclick = () => { Audio_.click(); showStageSelect(); };
+  document.getElementById('allClearToSelectBtn').onclick = () => { Audio_.click(); showStageSelect(); };
+  document.getElementById('allClearBackBtn').onclick = () => { Audio_.click(); goHome(); };
 
   // ---- Settings panel wiring ----
   const settingsBtn = document.getElementById('settingsBtn');
@@ -897,15 +1138,10 @@
 
   const bgmAmbientBtn = document.getElementById('bgmAmbientBtn');
   const bgmPopBtn = document.getElementById('bgmPopBtn');
-  const themeDarkBtn = document.getElementById('themeDarkBtn');
-  const themeBrightBtn = document.getElementById('themeBrightBtn');
 
   function refreshToggleUI(){
     bgmAmbientBtn.classList.toggle('active', Audio_.settings.bgmMode === 'ambient');
     bgmPopBtn.classList.toggle('active', Audio_.settings.bgmMode === 'pop');
-    themeDarkBtn.classList.toggle('active', Audio_.settings.theme === 'dark');
-    themeBrightBtn.classList.toggle('active', Audio_.settings.theme === 'bright');
-    wrap.setAttribute('data-theme', Audio_.settings.theme);
   }
   refreshToggleUI();
 
@@ -919,8 +1155,12 @@
     Audio_.startBgm('pop');
     refreshToggleUI();
   };
-  themeDarkBtn.onclick = () => { Audio_.click(); Audio_.setTheme('dark'); refreshToggleUI(); if(!running) draw(); };
-  themeBrightBtn.onclick = () => { Audio_.click(); Audio_.setTheme('bright'); refreshToggleUI(); if(!running) draw(); };
+
+  function applySkinDisplay(){
+    const bg = BACKGROUNDS[Progress.data.activeBackground] || BACKGROUNDS.dark;
+    wrap.setAttribute('data-theme', bg.mode);
+  }
+  applySkinDisplay();
 
   function openSettings(){
     const wasRunning = running;
@@ -945,48 +1185,95 @@
   bgmSlider.oninput = () => { Audio_.setVol('bgm', +bgmSlider.value); bgmVal.textContent = bgmSlider.value + '%'; };
   seSlider.oninput = () => { Audio_.setVol('se', +seSlider.value); seVal.textContent = seSlider.value + '%'; Audio_.jump(); };
 
-  // ---- Orb color picker ----
-  const ORB_COLORS = ['#4FF7D1','#ff3d7a','#ffb400','#b39bff','#00c2a8','#ffffff','#ff5b3d','#00c2ff'];
+  // ---- Shop: orb color / background / wall are all independent, coin-based (one free default each) ----
   const orbPreview = document.getElementById('orbPreview');
   const swatchGrid = document.getElementById('swatchGrid');
-  const colorScreen = document.getElementById('colorScreen');
+  const bgSwatchGrid = document.getElementById('bgSwatchGrid');
+  const wallSwatchGrid = document.getElementById('wallSwatchGrid');
   const colorPickBtn = document.getElementById('colorPickBtn');
   const colorBackBtn = document.getElementById('colorBackBtn');
 
-  function currentOrbDisplayColor(){
-    if (Audio_.settings.orbColor) return Audio_.settings.orbColor;
-    const theme = THEMES[Audio_.settings.theme] || THEMES.dark;
-    return theme.palette[0].orb;
-  }
   function updateOrbPreview(){
-    const c = currentOrbDisplayColor();
+    const c = (ORB_COLORS[Progress.data.activeOrbColor] || ORB_COLORS.cyan).c;
     orbPreview.style.background = c;
     orbPreview.style.color = c;
   }
 
-  function buildSwatches(){
-    swatchGrid.innerHTML = '';
-    const autoBtn = document.createElement('div');
-    autoBtn.className = 'swatch auto' + (!Audio_.settings.orbColor ? ' active' : '');
-    autoBtn.title = 'オート(ティアごとに変化)';
-    autoBtn.onclick = () => { Audio_.click(); Audio_.setOrbColor(null); buildSwatches(); updateOrbPreview(); };
-    swatchGrid.appendChild(autoBtn);
+  function flashInsufficient(el){
+    el.style.outline = '2px solid #ff5b3d';
+    setTimeout(() => { el.style.outline = ''; }, 350);
+  }
 
-    ORB_COLORS.forEach(c => {
+  // Generic builder for a cosmetic shop row: dict of {key:{cost, previewColor}}, owned list, active key,
+  // own/setActive callbacks, and a redraw callback for after a change.
+  function buildCosmeticGrid(gridEl, dict, ownedListKey, activeKey, onPicked){
+    gridEl.innerHTML = '';
+    Object.keys(dict).forEach(key => {
+      const item = dict[key];
+      const owned = Progress.data[ownedListKey].includes(key);
+      const active = Progress.data[activeKey] === key;
+      const wrapEl = document.createElement('div');
+      wrapEl.className = 'swatch-item';
+
       const el = document.createElement('div');
-      el.className = 'swatch' + (Audio_.settings.orbColor === c ? ' active' : '');
-      el.style.background = c;
-      el.style.color = c;
-      el.onclick = () => { Audio_.click(); Audio_.setOrbColor(c); buildSwatches(); updateOrbPreview(); };
-      swatchGrid.appendChild(el);
+      el.className = 'swatch' + (active ? ' active' : '') + (!owned ? ' locked' : '');
+      el.style.background = item.previewColor;
+      el.style.color = item.previewColor;
+      wrapEl.appendChild(el);
+
+      const price = document.createElement('div');
+      price.className = 'swatch-price';
+      price.textContent = owned ? (active ? '使用中' : '所持済み') : ('🪙 ' + item.cost);
+      wrapEl.appendChild(price);
+
+      el.onclick = () => {
+        if (owned){
+          Audio_.click();
+          onPicked(key);
+        } else if (Progress.spendCoins(item.cost)){
+          Audio_.chest();
+          Progress.own(ownedListKey, key);
+          onPicked(key);
+          updateWalletDisplays();
+        } else {
+          Audio_.click();
+          flashInsufficient(el);
+        }
+      };
+      gridEl.appendChild(wrapEl);
     });
   }
-  buildSwatches();
+
+  function buildAllShopGrids(){
+    buildCosmeticGrid(
+      swatchGrid,
+      Object.fromEntries(Object.entries(ORB_COLORS).map(([k,v]) => [k, {cost:v.cost, previewColor:v.c}])),
+      'ownedOrbColors', 'activeOrbColor',
+      (key) => { Progress.setActive('activeOrbColor', key); updateOrbPreview(); buildAllShopGrids(); if (!running) draw(); }
+    );
+    buildCosmeticGrid(
+      bgSwatchGrid,
+      Object.fromEntries(Object.entries(BACKGROUNDS).map(([k,v]) => [k, {cost:v.cost, previewColor:v.tierTop[0]}])),
+      'ownedBackgrounds', 'activeBackground',
+      (key) => { Progress.setActive('activeBackground', key); applySkinDisplay(); buildAllShopGrids(); if (!running) draw(); }
+    );
+    buildCosmeticGrid(
+      wallSwatchGrid,
+      Object.fromEntries(Object.entries(WALLS).map(([k,v]) => [k, {cost:v.cost, previewColor:v.tierWall[0]}])),
+      'ownedWalls', 'activeWall',
+      (key) => { Progress.setActive('activeWall', key); buildAllShopGrids(); if (!running) draw(); }
+    );
+  }
+
+  buildAllShopGrids();
   updateOrbPreview();
+  updateWalletDisplays();
 
   colorPickBtn.onclick = () => {
     Audio_.click();
     startScreen.classList.add('hidden');
+    buildAllShopGrids();
+    updateWalletDisplays();
     colorScreen.classList.remove('hidden');
   };
   colorBackBtn.onclick = () => {
