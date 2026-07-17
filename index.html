@@ -357,6 +357,46 @@
   .stage-card .desc{ font-size:11px; color:var(--dim); margin-top:2px; }
   .stage-card .target{ font-size:11px; color:var(--gold); margin-top:2px; }
   .stage-card .lock-icon{ font-size:18px; color:var(--dim); flex-shrink:0; }
+  .stage-card.cleared{ border-color:rgba(79,247,209,0.35); background:rgba(79,247,209,0.05); }
+  .clear-badge{
+    display:inline-block;
+    font-size:9px;
+    font-weight:800;
+    color:#052027;
+    background:var(--cyan);
+    padding:2px 6px;
+    border-radius:6px;
+    margin-left:6px;
+    letter-spacing:0.04em;
+    vertical-align:middle;
+  }
+
+  .overlay.shop-bg{
+    background: rgba(6,8,12,0.97);
+  }
+  .shop-preview-box{
+    width:100%; max-width:260px;
+    border-radius:14px;
+    overflow:hidden;
+    border:1px solid rgba(255,255,255,0.14);
+    margin-bottom:16px;
+    background:#000;
+  }
+  #previewCanvas{ display:block; width:100%; height:auto; }
+
+  .confirm-box{
+    width:100%; max-width:280px;
+    margin-top:14px;
+    padding:16px;
+    border-radius:14px;
+    border:1px solid rgba(255,200,87,0.4);
+    background:rgba(255,200,87,0.07);
+    text-align:center;
+  }
+  .confirm-box.hidden{ display:none; }
+  .confirm-text{ font-size:13px; margin-bottom:12px; color:var(--ink); }
+  .confirm-actions{ display:flex; gap:10px; justify-content:center; }
+  .confirm-actions .btn{ margin-top:0; flex:1; }
 </style>
 </head>
 <body>
@@ -418,18 +458,29 @@
     <div class="subtitle" style="margin-top:18px;">前兆の光を見て、次の動きを読め</div>
   </div>
 
-  <div class="overlay hidden" id="colorScreen">
+  <div class="overlay hidden shop-bg" id="colorScreen">
     <div class="label">SHOP</div>
     <div class="wallet">🪙 <span id="walletValShop">0</span></div>
 
-    <div class="shop-section-label">オーブの色(コインで購入)</div>
-    <div class="swatch-grid" id="swatchGrid"></div>
+    <div class="shop-tabs">
+      <button class="toggle-btn active" id="tabOrbBtn">オーブ</button>
+      <button class="toggle-btn" id="tabBgBtn">背景</button>
+      <button class="toggle-btn" id="tabWallBtn">壁</button>
+    </div>
 
-    <div class="shop-section-label">背景(コインで購入)</div>
-    <div class="swatch-grid" id="bgSwatchGrid"></div>
+    <div class="shop-preview-box">
+      <canvas id="previewCanvas" width="240" height="150"></canvas>
+    </div>
 
-    <div class="shop-section-label">壁(コインで購入)</div>
-    <div class="swatch-grid" id="wallSwatchGrid"></div>
+    <div class="swatch-grid" id="shopSwatchGrid"></div>
+
+    <div class="confirm-box hidden" id="confirmBox">
+      <div class="confirm-text" id="confirmText">この色に変更しますか?</div>
+      <div class="confirm-actions">
+        <button class="btn" id="confirmYesBtn">はい</button>
+        <button class="btn secondary" id="confirmNoBtn">いいえ</button>
+      </div>
+    </div>
 
     <button class="btn secondary" id="colorBackBtn">戻る</button>
   </div>
@@ -661,13 +712,18 @@
   let starLayers = [];
   let gameMode = 'endless'; // 'endless' | 'challenge'
   let currentStage = 0;
+  let wallsSpawned = 0;
+  let goalLine = null;
 
   const STAGES = [
-    { label:'ステージ1', desc:'まずは基本。隙間は動かない', target:10, reward:20, tierCap:0, forceMovingOff:true,  gapMult:1.0,  gravityMult:1.0,  jumpMult:1.0 },
-    { label:'ステージ2', desc:'隙間が上下に動き始める',     target:18, reward:25, tierCap:1, forceMovingOff:false, gapMult:1.0,  gravityMult:1.0,  jumpMult:1.0 },
-    { label:'ステージ3', desc:'低重力・大ジャンプ、ふわふわ操作', target:20, reward:35, tierCap:1, forceMovingOff:false, gapMult:1.0,  gravityMult:0.62, jumpMult:1.3 },
-    { label:'ステージ4', desc:'重力が強く、ジャンプが重い', target:20, reward:40, tierCap:1, forceMovingOff:false, gapMult:1.05, gravityMult:1.55, jumpMult:0.78 },
-    { label:'ステージ5', desc:'隙間が最初から狭い',         target:24, reward:55, tierCap:2, forceMovingOff:false, gapMult:0.7,  gravityMult:1.0,  jumpMult:1.0 },
+    { label:'ステージ1', desc:'まずは基本。隙間は動かない', target:10, reward:20, tierCap:0, forceMovingOff:true,  gapMult:1.0,  gravityMult:1.0,  jumpMult:1.0, orbSizeMult:1.0, speedMult:1.0 },
+    { label:'ステージ2', desc:'隙間が上下に動き始める',     target:18, reward:25, tierCap:1, forceMovingOff:false, gapMult:1.0,  gravityMult:1.0,  jumpMult:1.0, orbSizeMult:1.0, speedMult:1.0 },
+    { label:'ステージ3', desc:'低重力・大ジャンプ、ふわふわ操作', target:20, reward:35, tierCap:1, forceMovingOff:false, gapMult:1.0,  gravityMult:0.62, jumpMult:1.3, orbSizeMult:1.0, speedMult:1.0 },
+    { label:'ステージ4', desc:'重力が強く、ジャンプが重い', target:20, reward:40, tierCap:1, forceMovingOff:false, gapMult:1.05, gravityMult:1.55, jumpMult:0.78, orbSizeMult:1.0, speedMult:1.0 },
+    { label:'ステージ5', desc:'隙間が最初から狭い',         target:24, reward:55, tierCap:2, forceMovingOff:false, gapMult:0.7,  gravityMult:1.0,  jumpMult:1.0, orbSizeMult:1.0, speedMult:1.0 },
+    { label:'ステージ6', desc:'オーブが大きい、隙間が余計に狭く感じる', target:18, reward:50, tierCap:1, forceMovingOff:true,  gapMult:1.15, gravityMult:1.0,  jumpMult:1.0, orbSizeMult:1.8, speedMult:1.0 },
+    { label:'ステージ7', desc:'スクロールが速い、判断を急げ',   target:22, reward:60, tierCap:1, forceMovingOff:true,  gapMult:1.1,  gravityMult:1.0,  jumpMult:1.0, orbSizeMult:1.0, speedMult:1.5 },
+    { label:'ステージ8', desc:'オーブは小さいが、高速+隙間が動く総仕上げ', target:28, reward:80, tierCap:2, forceMovingOff:false, gapMult:0.85, gravityMult:1.0,  jumpMult:1.0, orbSizeMult:0.65, speedMult:1.35 },
   ];
 
   // Backgrounds and walls are chosen independently in the shop, then combined at render time
@@ -734,7 +790,10 @@
   function reset(){
     score = 0; coins = 0; elapsed = 0; spawnTimer = 0; nextChestScore = 15; lastPatternTier = -1;
     shake = 0;
-    orb = { x: 90*scaleS, y: (H/devicePixelRatio)*0.4, vy: 0, r: 10*scaleS };
+    wallsSpawned = 0;
+    goalLine = null;
+    const sizeMult = (gameMode === 'challenge' && STAGES[currentStage].orbSizeMult) ? STAGES[currentStage].orbSizeMult : 1;
+    orb = { x: 90*scaleS, y: (H/devicePixelRatio)*0.4, vy: 0, r: 10*scaleS*sizeMult };
     walls = [];
     particles = [];
     trail = [];
@@ -760,7 +819,11 @@
 
   // gap/speed are expressed relative to the reference 640px-tall canvas, then
   // scaled by scaleS so the felt difficulty stays the same on any screen size
-  function speedFor(tier){ return (2.6 + tier*0.55) * scaleS; }
+  function speedFor(tier){
+    const m = stageMod();
+    const mult = m && m.speedMult ? m.speedMult : 1;
+    return (2.6 + tier*0.55) * scaleS * mult;
+  }
   function stageMod(){ return gameMode === 'challenge' ? STAGES[currentStage] : null; }
   function gapFor(tier){
     const m = stageMod();
@@ -785,15 +848,24 @@
 
   function spawnWall(tier){
     const gap = gapFor(tier);
-    const margin = 40*scaleS;
-    let gapY = margin + Math.random()*( (H/devicePixelRatio) - gap - margin*2);
-    const wallH = H/devicePixelRatio;
+    const h = H/devicePixelRatio;
+    // wider margin keeps gaps away from the very top/bottom, where they felt unfair
+    const margin = Math.max(70*scaleS, h*0.16);
+    let gapY = margin + Math.random()*(h - gap - margin*2);
 
-    // preview flash: telegraph before wall becomes solid (implicit cue)
+    // cap how far the gap can jump vertically from the previous wall, so back-to-back
+    // walls can never demand an impossible top-to-bottom sprint
+    const prev = walls[walls.length - 1];
+    if (prev){
+      const maxDelta = h * 0.4;
+      gapY = Math.max(prev.gapY - maxDelta, Math.min(prev.gapY + maxDelta, gapY));
+      gapY = Math.max(margin, Math.min(h - gap - margin, gapY));
+    }
+
     walls.push({
       x: (W/devicePixelRatio) + 20,
       gapY, gap,
-      width: 26*scaleS,
+      width: 26 * scaleS,
       moving: movingAllowed(tier),
       phase: Math.random()*Math.PI*2,
       passed:false,
@@ -833,15 +905,22 @@
 
     // spawn
     spawnTimer -= dt;
-    if (spawnTimer <= 0){
+    const spawnLimit = gameMode === 'challenge' ? STAGES[currentStage].target : Infinity;
+    if (spawnTimer <= 0 && wallsSpawned < spawnLimit){
       spawnWall(tier);
+      wallsSpawned++;
       spawnTimer = Math.max(2.15 - tier*0.13, 1.3);
     }
 
     const spd = speedFor(tier)*60*dt;
     for (const w of walls){
       w.x -= spd;
-      if (w.moving) w.gapY += Math.sin(elapsed*1.6 + w.phase)*0.6;
+      if (w.moving){
+        w.gapY += Math.sin(elapsed*1.6 + w.phase)*0.6;
+        const margin = Math.max(70*scaleS, (H/devicePixelRatio)*0.16);
+        const maxGapY = (H/devicePixelRatio) - w.gap - margin;
+        w.gapY = Math.min(Math.max(w.gapY, margin), maxGapY);
+      }
       if (w.telegraph && elapsed - w.born > 0.35) w.telegraph = false;
 
       if (!w.passed && w.x + w.width < orb.x - orb.r){
@@ -859,9 +938,8 @@
           Audio_.chest();
           nextChestScore += 15 + tier*5;
         }
-        if (gameMode === 'challenge' && score >= STAGES[currentStage].target){
-          stageClear();
-          return;
+        if (gameMode === 'challenge' && score >= STAGES[currentStage].target && !goalLine){
+          goalLine = { x: (W/devicePixelRatio) + 60, width: 14*scaleS, cleared:false };
         }
       }
 
@@ -875,6 +953,16 @@
     }
     walls = walls.filter(w => w.x + w.width > -20);
     particles = particles.filter(p => (p.life -= dt) > 0);
+
+    // goal line: no gap to dodge, just cross it like a finish tape
+    if (goalLine){
+      goalLine.x -= spd;
+      if (!goalLine.cleared && orb.x - orb.r > goalLine.x + goalLine.width){
+        goalLine.cleared = true;
+        stageClear();
+        return;
+      }
+    }
 
     scoreVal.textContent = score;
     coinVal.textContent = coins;
@@ -936,6 +1024,21 @@
       }
     }
 
+    // goal line: a full-height checkered finish tape you simply need to cross (no gap to dodge)
+    if (goalLine){
+      const checkSize = Math.max(8, 10*scaleS);
+      for (let yy = 0; yy < h; yy += checkSize){
+        for (let xx = goalLine.x; xx < goalLine.x + goalLine.width; xx += checkSize){
+          const isBlack = (Math.round((xx - goalLine.x) / checkSize) + Math.round(yy / checkSize)) % 2 === 0;
+          ctx.fillStyle = isBlack ? '#101010' : '#f5f5f5';
+          ctx.fillRect(xx, yy, Math.min(checkSize, goalLine.x + goalLine.width - xx), Math.min(checkSize, h - yy));
+        }
+      }
+      ctx.strokeStyle = '#ffd460';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(goalLine.x, 0, goalLine.width, h);
+    }
+
     // orb trail (novelty: glowing tail)
     for (const p of trail){
       const a = p.life/p.max;
@@ -982,8 +1085,14 @@
     requestAnimationFrame(loop);
   }
 
+  let lastFlapTime = -Infinity;
   function flap(){
     if (!running) return;
+    // small cooldown so keyboard-mashing can't out-perform a single tap on touch —
+    // both input methods now behave the same way
+    const now = performance.now();
+    if (now - lastFlapTime < 110) return;
+    lastFlapTime = now;
     orb.vy = -8.1*scaleS*jumpMult();
     Audio_.jump();
   }
@@ -1017,16 +1126,18 @@
     stageGrid.innerHTML = '';
     STAGES.forEach((s, i) => {
       const unlocked = i <= Progress.data.stageProgress;
+      const cleared = i < Progress.data.stageProgress;
       const card = document.createElement('div');
-      card.className = 'stage-card' + (unlocked ? '' : ' locked');
+      card.className = 'stage-card' + (unlocked ? '' : ' locked') + (cleared ? ' cleared' : '');
+      const icon = cleared ? '✅' : (unlocked ? '▶' : '🔒');
       card.innerHTML = `
         <div class="num">${i+1}</div>
         <div class="info">
-          <div class="name">${s.label}</div>
+          <div class="name">${s.label}${cleared ? ' <span class=\"clear-badge\">CLEAR</span>' : ''}</div>
           <div class="desc">${s.desc}</div>
           <div class="target">目標スコア ${s.target} ・ 報酬 🪙${s.reward}</div>
         </div>
-        <div class="lock-icon">${unlocked ? '▶' : '🔒'}</div>
+        <div class="lock-icon">${icon}</div>
       `;
       if (unlocked){
         card.onclick = () => { Audio_.click(); startGame('challenge', i); };
@@ -1185,13 +1296,25 @@
   bgmSlider.oninput = () => { Audio_.setVol('bgm', +bgmSlider.value); bgmVal.textContent = bgmSlider.value + '%'; };
   seSlider.oninput = () => { Audio_.setVol('se', +seSlider.value); seVal.textContent = seSlider.value + '%'; Audio_.jump(); };
 
-  // ---- Shop: orb color / background / wall are all independent, coin-based (one free default each) ----
+  // ---- Shop: pick a category (orb / bg / wall) -> preview -> confirm before applying ----
   const orbPreview = document.getElementById('orbPreview');
-  const swatchGrid = document.getElementById('swatchGrid');
-  const bgSwatchGrid = document.getElementById('bgSwatchGrid');
-  const wallSwatchGrid = document.getElementById('wallSwatchGrid');
+  const shopSwatchGrid = document.getElementById('shopSwatchGrid');
   const colorPickBtn = document.getElementById('colorPickBtn');
   const colorBackBtn = document.getElementById('colorBackBtn');
+  const tabOrbBtn = document.getElementById('tabOrbBtn');
+  const tabBgBtn = document.getElementById('tabBgBtn');
+  const tabWallBtn = document.getElementById('tabWallBtn');
+  const previewCanvas = document.getElementById('previewCanvas');
+  const confirmBox = document.getElementById('confirmBox');
+  const confirmText = document.getElementById('confirmText');
+  const confirmYesBtn = document.getElementById('confirmYesBtn');
+  const confirmNoBtn = document.getElementById('confirmNoBtn');
+
+  const SHOP_DICTS = { orb: ORB_COLORS, bg: BACKGROUNDS, wall: WALLS };
+  const SHOP_OWNED_FIELD = { orb:'ownedOrbColors', bg:'ownedBackgrounds', wall:'ownedWalls' };
+  const SHOP_ACTIVE_FIELD = { orb:'activeOrbColor', bg:'activeBackground', wall:'activeWall' };
+  let shopTab = 'orb';
+  let pendingKey = null;
 
   function updateOrbPreview(){
     const c = (ORB_COLORS[Progress.data.activeOrbColor] || ORB_COLORS.cyan).c;
@@ -1199,26 +1322,80 @@
     orbPreview.style.color = c;
   }
 
-  function flashInsufficient(el){
-    el.style.outline = '2px solid #ff5b3d';
-    setTimeout(() => { el.style.outline = ''; }, 350);
+  function swatchPreviewColor(cat, key){
+    const item = SHOP_DICTS[cat][key];
+    if (cat === 'orb') return item.c;
+    if (cat === 'bg') return item.tierTop[0];
+    return item.tierWall[0];
   }
 
-  // Generic builder for a cosmetic shop row: dict of {key:{cost, previewColor}}, owned list, active key,
-  // own/setActive callbacks, and a redraw callback for after a change.
-  function buildCosmeticGrid(gridEl, dict, ownedListKey, activeKey, onPicked){
-    gridEl.innerHTML = '';
+  // Renders a small mock scene combining the 3 active cosmetics; if candidateKey is given,
+  // it swaps in that candidate for the currently open shop tab only (live "what if" preview).
+  function renderShopPreview(candidateKey){
+    const orbKey  = (shopTab === 'orb'  && candidateKey) ? candidateKey : Progress.data.activeOrbColor;
+    const bgKey   = (shopTab === 'bg'   && candidateKey) ? candidateKey : Progress.data.activeBackground;
+    const wallKey = (shopTab === 'wall' && candidateKey) ? candidateKey : Progress.data.activeWall;
+    const orbC = ORB_COLORS[orbKey].c;
+    const bgObj = BACKGROUNDS[bgKey];
+    const wallObj = WALLS[wallKey];
+
+    const pctx = previewCanvas.getContext('2d');
+    const pw = previewCanvas.width, ph = previewCanvas.height;
+    pctx.clearRect(0,0,pw,ph);
+    const grad = pctx.createLinearGradient(0,0,0,ph);
+    grad.addColorStop(0, bgObj.tierTop[0]);
+    grad.addColorStop(1, bgObj.bgBottom);
+    pctx.fillStyle = grad;
+    pctx.fillRect(0,0,pw,ph);
+
+    const wallX = pw*0.62, wallW = 20, gap = 56, gapY = ph*0.34;
+    pctx.fillStyle = wallObj.tierWall[0];
+    pctx.fillRect(wallX, 0, wallW, gapY);
+    pctx.fillRect(wallX, gapY+gap, wallW, ph-(gapY+gap));
+
+    pctx.beginPath();
+    pctx.fillStyle = orbC;
+    pctx.shadowColor = orbC;
+    pctx.shadowBlur = 12;
+    pctx.arc(pw*0.24, ph*0.5, 11, 0, Math.PI*2);
+    pctx.fill();
+    pctx.shadowBlur = 0;
+  }
+
+  function hideConfirm(){
+    pendingKey = null;
+    confirmBox.classList.add('hidden');
+    confirmText.style.color = '';
+  }
+
+  function showConfirmFor(key){
+    const owned = Progress.data[SHOP_OWNED_FIELD[shopTab]].includes(key);
+    const active = Progress.data[SHOP_ACTIVE_FIELD[shopTab]] === key;
+    if (active){ hideConfirm(); return; } // already selected, nothing to confirm
+    pendingKey = key;
+    const item = SHOP_DICTS[shopTab][key];
+    confirmText.style.color = '';
+    confirmText.textContent = owned ? 'この見た目に変更しますか?' : `🪙 ${item.cost} を使って購入しますか?`;
+    confirmBox.classList.remove('hidden');
+  }
+
+  function buildShopSwatches(){
+    const dict = SHOP_DICTS[shopTab];
+    const ownedList = Progress.data[SHOP_OWNED_FIELD[shopTab]];
+    const activeKey = Progress.data[SHOP_ACTIVE_FIELD[shopTab]];
+    shopSwatchGrid.innerHTML = '';
     Object.keys(dict).forEach(key => {
       const item = dict[key];
-      const owned = Progress.data[ownedListKey].includes(key);
-      const active = Progress.data[activeKey] === key;
+      const owned = ownedList.includes(key);
+      const active = activeKey === key;
       const wrapEl = document.createElement('div');
       wrapEl.className = 'swatch-item';
 
       const el = document.createElement('div');
       el.className = 'swatch' + (active ? ' active' : '') + (!owned ? ' locked' : '');
-      el.style.background = item.previewColor;
-      el.style.color = item.previewColor;
+      const pc = swatchPreviewColor(shopTab, key);
+      el.style.background = pc;
+      el.style.color = pc;
       wrapEl.appendChild(el);
 
       const price = document.createElement('div');
@@ -1227,52 +1404,69 @@
       wrapEl.appendChild(price);
 
       el.onclick = () => {
-        if (owned){
-          Audio_.click();
-          onPicked(key);
-        } else if (Progress.spendCoins(item.cost)){
-          Audio_.chest();
-          Progress.own(ownedListKey, key);
-          onPicked(key);
-          updateWalletDisplays();
-        } else {
-          Audio_.click();
-          flashInsufficient(el);
-        }
+        Audio_.click();
+        showConfirmFor(key);
+        renderShopPreview(key);
       };
-      gridEl.appendChild(wrapEl);
+      shopSwatchGrid.appendChild(wrapEl);
     });
   }
 
-  function buildAllShopGrids(){
-    buildCosmeticGrid(
-      swatchGrid,
-      Object.fromEntries(Object.entries(ORB_COLORS).map(([k,v]) => [k, {cost:v.cost, previewColor:v.c}])),
-      'ownedOrbColors', 'activeOrbColor',
-      (key) => { Progress.setActive('activeOrbColor', key); updateOrbPreview(); buildAllShopGrids(); if (!running) draw(); }
-    );
-    buildCosmeticGrid(
-      bgSwatchGrid,
-      Object.fromEntries(Object.entries(BACKGROUNDS).map(([k,v]) => [k, {cost:v.cost, previewColor:v.tierTop[0]}])),
-      'ownedBackgrounds', 'activeBackground',
-      (key) => { Progress.setActive('activeBackground', key); applySkinDisplay(); buildAllShopGrids(); if (!running) draw(); }
-    );
-    buildCosmeticGrid(
-      wallSwatchGrid,
-      Object.fromEntries(Object.entries(WALLS).map(([k,v]) => [k, {cost:v.cost, previewColor:v.tierWall[0]}])),
-      'ownedWalls', 'activeWall',
-      (key) => { Progress.setActive('activeWall', key); buildAllShopGrids(); if (!running) draw(); }
-    );
+  function setShopTab(tab){
+    shopTab = tab;
+    hideConfirm();
+    tabOrbBtn.classList.toggle('active', tab === 'orb');
+    tabBgBtn.classList.toggle('active', tab === 'bg');
+    tabWallBtn.classList.toggle('active', tab === 'wall');
+    buildShopSwatches();
+    renderShopPreview();
   }
 
-  buildAllShopGrids();
+  tabOrbBtn.onclick = () => { Audio_.click(); setShopTab('orb'); };
+  tabBgBtn.onclick = () => { Audio_.click(); setShopTab('bg'); };
+  tabWallBtn.onclick = () => { Audio_.click(); setShopTab('wall'); };
+
+  confirmYesBtn.onclick = () => {
+    if (!pendingKey) return;
+    const key = pendingKey;
+    const owned = Progress.data[SHOP_OWNED_FIELD[shopTab]].includes(key);
+    if (owned){
+      Audio_.click();
+    } else {
+      const cost = SHOP_DICTS[shopTab][key].cost;
+      if (!Progress.spendCoins(cost)){
+        confirmText.style.color = '#ff5b3d';
+        confirmText.textContent = `コインが足りません(あと🪙${cost - Progress.data.bankCoins})`;
+        Audio_.click();
+        return; // keep dialog open so they can cancel or come back later
+      }
+      Progress.own(SHOP_OWNED_FIELD[shopTab], key);
+      Audio_.chest();
+    }
+    Progress.setActive(SHOP_ACTIVE_FIELD[shopTab], key);
+    hideConfirm();
+    buildShopSwatches();
+    updateWalletDisplays();
+    updateOrbPreview();
+    applySkinDisplay();
+    renderShopPreview();
+    if (!running) draw();
+  };
+
+  confirmNoBtn.onclick = () => {
+    Audio_.click();
+    hideConfirm();
+    renderShopPreview();
+  };
+
+  setShopTab('orb');
   updateOrbPreview();
   updateWalletDisplays();
 
   colorPickBtn.onclick = () => {
     Audio_.click();
     startScreen.classList.add('hidden');
-    buildAllShopGrids();
+    setShopTab('orb');
     updateWalletDisplays();
     colorScreen.classList.remove('hidden');
   };
@@ -1282,7 +1476,7 @@
     startScreen.classList.remove('hidden');
   };
 
-  window.addEventListener('keydown', e => { if (e.code === 'Space'){ e.preventDefault(); flap(); }});
+  window.addEventListener('keydown', e => { if (e.code === 'Space'){ e.preventDefault(); if (e.repeat) return; flap(); }});
 
   function isInteractiveTarget(target){
     return !!target.closest('button, input, .swatch, .toggle-btn, .icon-btn, .settings-panel, .overlay');
